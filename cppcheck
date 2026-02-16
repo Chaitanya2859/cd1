@@ -1,8 +1,2 @@
-# for the smooth operation
-
-if [ $# -ne 1 ]; then
-    echo "Usage: ./run.sh <file.cpp>"
-    exit 1
-fi
-
-python3 src/main.py "$1"
+#!/bin/bash
+python3 src/main.py "$@"

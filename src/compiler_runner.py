@@ -1,14 +1,13 @@
 import subprocess
 
-def run_cpp_compiler(filename):
-
+def run_cpp_compiler(file_path):
     try:
-        result = subprocess.run(
-            ["g++", filename],
+        res = subprocess.run(
+            ["g++", file_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
         )
-        return result.stderr
+        return res.stdout + res.stderr
     except FileNotFoundError:
         return "error: g++ compiler not found."
