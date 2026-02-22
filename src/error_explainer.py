@@ -85,6 +85,13 @@ ERROR_PATTERNS = [
         "confidence": 0.9
     },
     {
+    "pattern": r"break statement not within loop or switch",
+    "explanation": "The 'break' keyword can only be used inside loops or switch statements.",
+    "suggestion": "Place the break statement inside a loop or remove it.",
+    "category": "Control Flow",
+    "confidence": 0.9
+    },
+    {
         "pattern": r"'(.+)' does not name a type",
         "explanation": "The type '{}' is not recognized.",
         "suggestion": "Check the spelling or include the appropriate header defining '{}'.",
@@ -216,83 +223,87 @@ ERROR_PATTERNS = [
     }
 ]
 
+def load_error_data()->List[Dict[str,Any]]:
 
-def load_error_data() -> List[Dict[str, Any]]:
-    """Checks if json file with the matching error pattern exists or not."""
-    base_dir = os.path.dirname(os.path.dirname(__file__))
-    json_path = os.path.join(base_dir, "data", "errors.json")
-    
+    base_dir=os.path.dirname(os.path.dirname(__file__))
+    json_path=os.path.join(base_dir,"data","errors.json")
+
     if os.path.exists(json_path):
         try:
-            with open(json_path, "r") as f:
-                return json.load(f).get("errors", [])
-        except (json.JSONDecodeError, IOError):
+            with open(json_path,"r") as f:
+                return json.load(f).get("errors",[])
+        except (json.JSONDecodeError,IOError):
             pass
-    
+
     return ERROR_PATTERNS
 
-def explain_error(error) -> Dict[str, Any]:
-    #if regex match it suggests a fix
+
+def explain_error(error)->Dict[str,Any]:
+
     if not error or not error.message:
         return {
-            "explanation": "No error message provided.",
-            "suggestion": "Check the compilation command and input files.",
-            "category": "Unknown",
-            "confidence": 0.0
+            "explanation":"No error message provided.",
+            "suggestion":"Check the compilation command and input files.",
+            "category":"Unknown",
+            "confidence":0.0
         }
 
-    best = None
-    highest = 0.0
+    best=None
+    highest=0.0
 
     for pattern in ERROR_PATTERNS:
-        if pattern.get('type') and pattern['type'] != error.error_type:
+
+        if pattern.get("type") and pattern["type"]!=error.error_type:
             continue
 
-        match = re.search(pattern["pattern"], error.message)
+        match=re.search(pattern["pattern"],error.message)
+
         if match:
-            confidence = pattern.get("confidence", 0.5)
+            confidence=pattern.get("confidence",0.5)
 
-            if confidence > highest:
-                explanation = pattern["explanation"]
-                suggestion = pattern["suggestion"]
+            if confidence>highest:
 
-                if 'capture_group' in pattern and len(match.groups()) >= 1:
-                    idx = pattern['capture_group'] - 1
-                    captured = match.group(idx + 1)
-                    explanation = explanation.replace('{}', f"'{captured}'")
-                    suggestion = suggestion.replace('{}', f"'{captured}'")
+                explanation=pattern["explanation"]
+                suggestion=pattern["suggestion"]
 
-                best = {
-                    "explanation": explanation,
-                    "suggestion": suggestion,
-                    "category": pattern.get("category", "Unknown"),
-                    "confidence": confidence
+                if "capture_group" in pattern and len(match.groups())>=1:
+                    idx=pattern["capture_group"]-1
+                    captured=match.group(idx+1)
+                    explanation=explanation.replace("{}",f"'{captured}'")
+                    suggestion=suggestion.replace("{}",f"'{captured}'")
+
+                best={
+                    "explanation":explanation,
+                    "suggestion":suggestion,
+                    "category":pattern.get("category","Unknown"),
+                    "confidence":confidence
                 }
-                highest = confidence
+
+                highest=confidence
 
     if best:
         return best
 
     return {
-        "explanation": "The specific error message is not recognized in our database.",
-        "suggestion": "Check the code around the error line for common syntax mistakes.",
-        "category": "Unknown",
-        "confidence": 0.3
+        "explanation":"The specific error message is not recognized in our database.",
+        "suggestion":"Check the code around the error line for common syntax mistakes.",
+        "category":"Unknown",
+        "confidence":0.3
     }
 
-def enrich_error(error: 'CompilerError') -> None:
-    #   Divides error into object
+
+def enrich_error(error:'CompilerError')->None:
 
     if not error:
         return
-        
-    result = explain_error(error)
-    error.explanation = result["explanation"]
-    error.suggestion = result["suggestion"]
-    error.category = result["category"]
-    error.confidence = result["confidence"]
-    
-    # check line file and whether the context is stored
+
+    result=explain_error(error)
+
+    error.explanation=result["explanation"]
+    error.suggestion=result["suggestion"]
+    error.category=result["category"]
+    error.confidence=result["confidence"]
+
     if error.file and error.line and not error.context:
         from error_parser import get_source_context
-        error.context = get_source_context(error.file, error.line)
+        error.context=get_source_context(error.file,error.line)

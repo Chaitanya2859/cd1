@@ -3,26 +3,31 @@ import os
 from models import CompilerError
 
 
-def get_source_context(file_path, line_no, context_lines=2):
-    if not file_path or not os.path.exists(file_path):
+def get_source_context(file_path,line_no,context_lines=2):
+
+    if not file_path:
+        return None
+
+    if not os.path.exists(file_path):
         return None
 
     try:
-        with open(file_path, "r") as f:
-            lines = f.readlines()
+        with open(file_path,"r") as f:
+            lines=f.readlines()
 
-        s = max(0, line_no - 1 - context_lines)
-        e = min(len(lines), line_no + context_lines)
+        start=max(0,line_no-1-context_lines)
+        end=min(len(lines),line_no+context_lines)
 
         return {
-            "start_line": s + 1,
-            "lines": lines[s:e],
+            "start_line":start+1,
+            "lines":lines[start:end]
         }
+
     except Exception:
         return None
 
 
-_error_re = re.compile(
+error_pattern=re.compile(
     r"^(?P<file>.+?):"
     r"(?P<line>\d+)"
     r"(?::(?P<col>\d+))?"
@@ -33,58 +38,73 @@ _error_re = re.compile(
 
 
 def parse_errors(raw_output):
-    errs = []
+
+    errors=[]
+
     if not raw_output:
-        return errs
+        return errors
 
-    lines = raw_output.splitlines()
-    i = 0
-    n = len(lines)
+    lines=raw_output.splitlines()
+    i=0
 
-    while i < n:
-        cur = lines[i].strip()
+    while i<len(lines):
 
-        if "Undefined symbols for architecture" in cur:
-            block = [cur]
-            i += 1
-            while i < n:
-                t = lines[i].strip()
-                block.append(t)
-                if "ld: symbol(s) not found for architecture" in t:
+        current=lines[i].strip()
+
+        if "Undefined symbols for architecture" in current:
+
+            block=[current]
+            i+=1
+
+            while i<len(lines):
+                line=lines[i].strip()
+                block.append(line)
+
+                if "ld: symbol(s) not found for architecture" in line:
                     break
-                i += 1
 
-            txt = "\n".join(block)
-            errs.append(
+                i+=1
+
+            message_text="\n".join(block)
+
+            errors.append(
                 CompilerError(
                     file=None,
                     line=None,
                     column=None,
                     error_type="linker",
-                    message=txt,
-                    raw=txt,
+                    message=message_text,
+                    raw=message_text
                 )
             )
-            i += 1
+
+            i+=1
             continue
 
-        m = _error_re.match(cur)
-        if m:
-            g = m.groupdict()
-            err = CompilerError(
-                file=g["file"],
-                line=int(g["line"]),
-                column=int(g["col"]) if g.get("col") else None,
-                error_type=g["type"],
-                message=g["message"].strip(),
-                raw=cur,
+        match=error_pattern.match(current)
+
+        if match:
+
+            groups=match.groupdict()
+
+            error_obj=CompilerError(
+                file=groups["file"],
+                line=int(groups["line"]),
+                column=int(groups["col"]) if groups.get("col") else None,
+                error_type=groups["type"],
+                message=groups["message"].strip(),
+                raw=current
             )
 
-            if err.file and err.line and os.path.exists(err.file):
-                err.context = get_source_context(err.file, err.line)
+            if error_obj.file and error_obj.line:
+                if os.path.exists(error_obj.file):
+                    error_obj.context=get_source_context(
+                        error_obj.file,
+                        error_obj.line
+                    )
 
-            errs.append(err)
+            errors.append(error_obj)
 
-        i += 1
+        i+=1
 
-    return errs
+    return errors
