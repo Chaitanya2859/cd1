@@ -26,37 +26,40 @@ class CompilerError:
             "category":self.category,
             "confidence":self.confidence,
         }
-
+    
     def __str__(self):
-        out=[]
-
+        parts=[]
+        location=""
         if self.file:
-            out.append(f"{self.file}:")
+            location+=self.file
         if self.line:
-            out.append(f"{self.line}:")
-            if self.column:
-                out.append(f"{self.column}:")
+            location+=f":{self.line}"
+        if self.column:
+            location+=f":{self.column}"
+        if location:
+            parts.append(location+" ")
+        #file:line:column
 
-        if out:
-            out[-1] += " "
-
-        out.append(f"{self.error_type.upper()}:{self.message}")
+        parts.append(f"{self.error_type.upper()}:{self.message}")
 
         if self.explanation:
-            out.append(f"\nExplanation:{self.explanation}")
+            parts.append(f"\nExplanation: {self.explanation}")
         if self.suggestion:
-            out.append(f"\nSuggestion:{self.suggestion}")
+            parts.append(f"\nSuggestion: {self.suggestion}")
         if self.category:
-            out.append(f"\nCategory:{self.category} (confidence:{self.confidence:.2f})")
+            parts.append(
+                f"\nCategory: {self.category} (confidence: {self.confidence:.2f})"
+            )
 
         if self.context:
-            out.append("\nContext:")
+            parts.append("\nContext:")
             start=self.context["start_line"]
-            for i, line in enumerate(self.context["lines"], start=start):
-                mark="→" if i == self.line else " "
-                out.append(f"{i:4} {mark} {line.rstrip()}")
-                if i == self.line and self.column:
-                    pad=" " * (self.column + 6)
-                    out.append(pad + "^")
 
-        return "".join(out)
+            for i,line in enumerate(self.context["lines"],start=start):
+                marker="→" if i == self.line else " "
+                parts.append(f"\n{i:4} {marker} {line.rstrip()}")
+
+                if i == self.line and self.column:
+                    parts.append("\n" + " " * (self.column + 6) + "^")
+
+        return "".join(parts)

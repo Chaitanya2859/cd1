@@ -1,0 +1,85 @@
+[
+  {
+    "message": "expression result unused [-Wunused-value]",
+    "category": "AST-Based Analysis",
+    "explanation": "The compiler found a problem near this line, but it doesn\u2019t match a known pattern. Carefully review the syntax and logic around the highlighted line.",
+    "suggestion": "Inspect the highlighted line and surrounding code. Verify syntax, types, and required declarations.",
+    "confidence": 0.5,
+    "context": {
+      "start_line": 3,
+      "lines": [
+        "\n",
+        "int add(int a, int b) {\n",
+        "    a + b;\n",
+        "}\n",
+        "\n"
+      ]
+    }
+  },
+  {
+    "message": "non-void function does not return a value [-Wreturn-type]",
+    "category": "AST-Based Analysis",
+    "explanation": "The compiler found a problem near this line, but it doesn\u2019t match a known pattern. Carefully review the syntax and logic around the highlighted line.",
+    "suggestion": "Inspect the highlighted line and surrounding code. Verify syntax, types, and required declarations.",
+    "confidence": 0.5,
+    "context": {
+      "start_line": 4,
+      "lines": [
+        "int add(int a, int b) {\n",
+        "    a + b;\n",
+        "}\n",
+        "\n",
+        "int main() {\n"
+      ]
+    }
+  },
+  {
+    "message": "expected '}'",
+    "category": "AST-Based Analysis",
+    "explanation": "The compiler found a problem near this line, but it doesn\u2019t match a known pattern. Carefully review the syntax and logic around the highlighted line.",
+    "suggestion": "Inspect the highlighted line and surrounding code. Verify syntax, types, and required declarations.",
+    "confidence": 0.5,
+    "context": {
+      "start_line": 5,
+      "lines": [
+        "    if(true){\n",
+        "        cout << \"Hello\";\n",
+        "    // missing closing brace\n"
+      ]
+    }
+  },
+  {
+    "message": "expected ';' after expression",
+    "category": "AST-Based Analysis",
+    "explanation": "The compiler found a problem near this line, but it doesn\u2019t match a known pattern. Carefully review the syntax and logic around the highlighted line.",
+    "suggestion": "Inspect the highlighted line and surrounding code. Verify syntax, types, and required declarations.",
+    "confidence": 0.5,
+    "context": {
+      "start_line": 3,
+      "lines": [
+        "\n",
+        "int add(int a, int b) {\n",
+        "    a + b\n",
+        "}\n",
+        "\n"
+      ]
+    }
+  },
+  {
+    "message": "expected ';' after expression",
+    "category": "Syntax",
+    "explanation": "You forgot a semicolon at the end of an expression. This error occurred inside a TypedefDecl.",
+    "suggestion": "Add a semicolon ';' at the end of the expression.",
+    "confidence": 0.9500000000000001,
+    "context": {
+      "start_line": 3,
+      "lines": [
+        "\n",
+        "int add(int a, int b) {\n",
+        "    a + b\n",
+        "}\n",
+        "\n"
+      ]
+    }
+  }
+]

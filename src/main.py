@@ -3,29 +3,33 @@
 import argparse
 import json
 import sys
+import textwrap
 
 from compiler_runner import run_cpp_compiler
 from error_parser import parse_errors
 from error_explainer import enrich_error
+from dataset_logger import log_example
+from ast_extractor import extract_ast, extract_node_near_line
 
-RED = "\033[91m"
-YELLOW = "\033[93m"
-BLUE = "\033[95m"
-BOLD = "\033[1m"
-RESET = "\033[0m"
+RED="\033[91m"
+YELLOW="\033[93m"
+GREEN="\033[92m"
+BLUE="\033[95m"
+BOLD="\033[1m"
+RESET="\033[0m"
+
 
 def parse_arguments():
-    parser=argparse.ArgumentParser(description="C++ Error Explaination Tool")
-
+    parser=argparse.ArgumentParser(description="C++ Error Explanation Tool")
     parser.add_argument("source_file",help="C++ source file to compile")
     parser.add_argument("-j","--json",action="store_true",help="print output in JSON format")
     parser.add_argument("-v","--verbose",action="store_true",help="show detailed context")
-    parser.add_argument("-c","--context",type=int,default=2,help="number of context lines")
+    parser.add_argument("-c","--context",type=int, default=2,help="number of context lines")
 
     return parser.parse_args()
 
 
-def print_error(error,verbose=False):
+def print_error(error, verbose=False):
     etype=error.error_type.lower()
 
     if etype=="error":
@@ -35,60 +39,79 @@ def print_error(error,verbose=False):
     else:
         color=BLUE
 
-    print(f"{color}{BOLD}{etype.upper()}:{RESET} {error.message}")
+    print(f"\n{color}{BOLD}{etype.upper()}:{error.message}{RESET}")
 
     if error.file:
-        location=error.file
+        location=f"{error.file}"
         if error.line is not None:
-            location+=f": line {error.line}"
-        if error.column is not None:
-            location+=f", column {error.column}"
-        print(f"  {BLUE}{location}{RESET}")
+            location+=f" (line {error.line}"
+            if error.column is not None:
+                location+=f", column {error.column}"
+            location+=")"
+        print(f"  {BLUE}Location:{RESET} {location}")
 
     if error.explanation:
-        print(f"  Explanation: {error.explanation}")
+        print(f"\n  {BLUE}{BOLD}Explanation:{RESET}")
+        wrapped=textwrap.fill(error.explanation,width=80)
+        for line in wrapped.split("\n"):
+            print(f"  {BLUE}{line}{RESET}")
 
     if error.suggestion:
-        print(f"  Suggestion: {error.suggestion}")
+        print(f"\n  {GREEN}{BOLD}How to Fix:{RESET}")
+        wrapped=textwrap.fill(error.suggestion,width=80)
+        for line in wrapped.split("\n"):
+            print(f"  {GREEN}{line}{RESET}")
+
+    if hasattr(error, "security_risk"):
+        print(f"\n  {YELLOW}{BOLD}Security Assessment:{RESET}")
+        print(f"  {YELLOW}Risk Level: {error.security_risk}{RESET}")
+
+        if error.risk_reason:
+            print(f"  {YELLOW}{error.risk_reason}{RESET}")
 
     if verbose and error.context and "lines" in error.context:
-        print("\n  Context:")
+        print(f"\n  {BOLD}Code Context:{RESET}")
         start=error.context["start_line"]
 
         for i,line in enumerate(error.context["lines"],start=start):
-            marker="->" if i==error.line else "  "
+            marker="→" if i==error.line else " "
             print(f"  {marker} {i}: {line.rstrip()}")
 
     print()
 
-
 def main():
-
     args=parse_arguments()
-
     output=run_cpp_compiler(args.source_file)
-
     if not output:
         if args.json:
-            print(json.dumps({"status":"success"},indent=2))
+            print(json.dumps({"status": "success"}, indent=2))
         else:
             print("Compilation successful")
         return 0
 
     errors=parse_errors(output)
+    ast_text=extract_ast(args.source_file)
 
     for e in errors:
+
+        if e.line:
+            e.ast_node=extract_node_near_line(ast_text, e.line)
+        else:
+            e.ast_node=None
+
         enrich_error(e)
+        log_example(e)
 
     if args.json:
         result={
-            "status":"error",
-            "file":args.source_file,
-            "error_count":sum(1 for e in errors if e.error_type=="error"),
-            "warning_count":sum(1 for e in errors if e.error_type=="warning"),
-            "errors":[e.to_dict() for e in errors]
+            "status": "error",
+            "file": args.source_file,
+            "error_count": sum(1 for e in errors if e.error_type=="error"),
+            "warning_count": sum(1 for e in errors if e.error_type=="warning"),
+            "errors": [e.to_dict() for e in errors]
         }
-        print(json.dumps(result,indent=2))
+
+        print(json.dumps(result, indent=2))
         return 1
 
     print(f"\n{len(errors)} issue(s) found:\n")
@@ -106,8 +129,7 @@ def main():
 
     print(f"{error_count} error(s), {warning_count} warning(s)")
 
-    return 1 if error_count>0 else 0
-
+    return 1 if error_count > 0 else 0
 
 if __name__ == "__main__":
     sys.exit(main())

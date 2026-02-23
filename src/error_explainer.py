@@ -2,13 +2,20 @@ import json
 import os
 import re
 from typing import Dict, Any, Optional, List
+from models import CompilerError
 
-
-ERROR_PATTERNS = [
+ERROR_PATTERNS=[
     {
         "pattern": r"expected ';' before",
         "explanation": "You likely forgot a semicolon at the end of a statement.",
         "suggestion": "Add a semicolon at the end of the line or the line before the error.",
+        "category": "Syntax",
+        "confidence": 0.9
+    },
+    {
+        "pattern": r"expected ';' after expression",
+        "explanation": "You forgot a semicolon at the end of an expression.",
+        "suggestion": "Add a semicolon ';' at the end of the expression.",
         "category": "Syntax",
         "confidence": 0.9
     },
@@ -85,11 +92,11 @@ ERROR_PATTERNS = [
         "confidence": 0.9
     },
     {
-    "pattern": r"break statement not within loop or switch",
+    "pattern": r"'?break'?\s+statement\s+not\s+(within|in)\s+loop\s+or\s+switch",
     "explanation": "The 'break' keyword can only be used inside loops or switch statements.",
     "suggestion": "Place the break statement inside a loop or remove it.",
     "category": "Control Flow",
-    "confidence": 0.9
+    "confidence": 0.95
     },
     {
         "pattern": r"'(.+)' does not name a type",
@@ -223,80 +230,137 @@ ERROR_PATTERNS = [
     }
 ]
 
-def load_error_data()->List[Dict[str,Any]]:
+SECURITY_RULES=[
+    {
+        "pattern": r"may be used uninitialized",
+        "risk": "High",
+        "reason": "Uninitialized variables may cause undefined behavior or memory corruption."
+    },
+    {
+        "pattern": r"division by zero",
+        "risk": "High",
+        "reason": "Division by zero can crash the program or cause undefined behavior."
+    },
+    {
+        "pattern": r"invalid conversion",
+        "risk": "Medium",
+        "reason": "Incorrect type conversion may lead to memory or logic errors."
+    },
+    {
+        "pattern": r"assignment of read-only location",
+        "risk": "Medium",
+        "reason": "Modifying const-qualified data may indicate unsafe design."
+    },
+    {
+        "pattern": r"undefined reference",
+        "risk": "Low",
+        "reason": "Linker errors typically do not introduce runtime vulnerabilities."
+    }
+]
 
-    base_dir=os.path.dirname(os.path.dirname(__file__))
-    json_path=os.path.join(base_dir,"data","errors.json")
-
-    if os.path.exists(json_path):
-        try:
-            with open(json_path,"r") as f:
-                return json.load(f).get("errors",[])
-        except (json.JSONDecodeError,IOError):
-            pass
-
-    return ERROR_PATTERNS
-
-
-def explain_error(error)->Dict[str,Any]:
-
+def explain_error(error) -> Dict[str, Any]:
     if not error or not error.message:
         return {
-            "explanation":"No error message provided.",
-            "suggestion":"Check the compilation command and input files.",
-            "category":"Unknown",
-            "confidence":0.0
+            "explanation": "No error message provided.",
+            "suggestion": "Check the compilation command and input files.",
+            "category": "Unknown",
+            "confidence": 0.0
         }
 
     best=None
-    highest=0.0
+    maxi=0.0
 
     for pattern in ERROR_PATTERNS:
-
         if pattern.get("type") and pattern["type"]!=error.error_type:
             continue
 
-        match=re.search(pattern["pattern"],error.message)
-
+        match=re.search(pattern["pattern"],error.message,re.IGNORECASE)
         if match:
             confidence=pattern.get("confidence",0.5)
 
-            if confidence>highest:
-
+            if confidence>maxi:
                 explanation=pattern["explanation"]
                 suggestion=pattern["suggestion"]
 
-                if "capture_group" in pattern and len(match.groups())>=1:
-                    idx=pattern["capture_group"]-1
-                    captured=match.group(idx+1)
-                    explanation=explanation.replace("{}",f"'{captured}'")
-                    suggestion=suggestion.replace("{}",f"'{captured}'")
+                if "capture_group" in pattern and match.groups():
+                    idx=pattern["capture_group"] - 1
+                    captured=match.group(idx + 1)
+                    explanation=explanation.replace("{}", f"'{captured}'")
+                    suggestion=suggestion.replace("{}", f"'{captured}'")
 
                 best={
-                    "explanation":explanation,
-                    "suggestion":suggestion,
-                    "category":pattern.get("category","Unknown"),
-                    "confidence":confidence
+                    "explanation": explanation,
+                    "suggestion": suggestion,
+                    "category": pattern.get("category", "Unknown"),
+                    "confidence": confidence
                 }
 
-                highest=confidence
+                maxi=confidence
 
     if best:
+        node=getattr(error, "ast_node", None)
+        if node:
+            best["explanation"] += f" This error occurred inside a {node}."
+            best["confidence"]=min(1.0, best["confidence"] + 0.05)
         return best
 
+    node=getattr(error, "ast_node", None)
+
+    if node == "DeclStmt":
+        explanation=(
+        "This error happened while declaring a variable or object. "
+        "It usually means something is missing or incorrectly written in the declaration, "
+        "such as a missing semicolon or an invalid type."
+        )
+    elif node == "BinaryOperator":
+        explanation=(
+        "This error happened during an operation like assignment or comparison. "
+        "It often means the types on both sides don’t match or the operator is being used incorrectly, "
+        )
+    elif node == "CallExpr":
+        explanation=(
+        "This error happened while calling a function. "
+        "Check that the function name is correct and that you are passing the right number and type of arguments."
+        )
+    elif node == "IfStmt":
+        explanation=(
+        "This error occurred inside an if statement. "
+        "Make sure the condition is written correctly and uses valid expressions."
+    )
+    elif node == "ReturnStmt":
+        explanation=(
+        "This error occurred in a return statement. "
+        "Ensure the value you are returning matches the function’s declared return type."
+        )
+    else:
+        explanation=(
+        "The compiler found a problem near this line, but it doesn’t match a known pattern. "
+        "Carefully review the syntax and logic around the highlighted line."
+    )
+
     return {
-        "explanation":"The specific error message is not recognized in our database.",
-        "suggestion":"Check the code around the error line for common syntax mistakes.",
-        "category":"Unknown",
-        "confidence":0.3
+        "explanation": explanation,
+        "suggestion": (
+            "Inspect the highlighted line and surrounding code. "
+            "Verify syntax, types, and required declarations."
+        ),
+        "category": "AST-Based Analysis",
+        "confidence": 0.5 if node else 0.3
     }
 
+def analyze_security_risk(error):
+    if not error or not error.message:
+        return "None", None
 
-def enrich_error(error:'CompilerError')->None:
+    for rule in SECURITY_RULES:
+        if re.search(rule["pattern"], error.message, re.IGNORECASE):
+            return rule["risk"], rule["reason"]
+    return "Low", "No immediate security risk detected."
 
+
+def enrich_error(error: 'CompilerError') -> None:
     if not error:
         return
-
     result=explain_error(error)
 
     error.explanation=result["explanation"]
@@ -304,6 +368,10 @@ def enrich_error(error:'CompilerError')->None:
     error.category=result["category"]
     error.confidence=result["confidence"]
 
+    risk,reason=analyze_security_risk(error)
+    error.security_risk=risk
+    error.risk_reason=reason
+
     if error.file and error.line and not error.context:
         from error_parser import get_source_context
-        error.context=get_source_context(error.file,error.line)
+        error.context=get_source_context(error.file, error.line)
