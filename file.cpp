@@ -1,9 +1,10 @@
+// Enter your C++ code here
 #include <iostream>
 using namespace std;
 
 int add(int a, int b) {
     a+b;
-    return 1
+    return 2;
 }
 
 int main() {
