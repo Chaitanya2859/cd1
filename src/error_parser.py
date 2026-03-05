@@ -11,20 +11,20 @@ error_pattern=re.compile(
     r"\s*(?P<message>.*)$"
 )
 
-def get_source_context(file_path,line_no,context_lines=2):
-    if not file_path:
+def get_source_context(path,line_no,context_lines=2):
+    if not path:
         return None
 
-    if not os.path.exists(file_path):
+    if not os.path.exists(path):
         return None
 
     try:
-        with open(file_path,"r") as f:
+        with open(path,"r") as f:
             lines=f.readlines()
         start=max(0,line_no-1-context_lines)
         end=min(len(lines),line_no+context_lines)
 
-        return {
+        return{
             "start_line":start+1,
             "lines":lines[start:end]
         }

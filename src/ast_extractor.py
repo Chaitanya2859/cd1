@@ -9,7 +9,6 @@ def extract_ast(file_path):
             text=True
         )
         return result.stdout
-
     except Exception:
         return None
     

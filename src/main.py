@@ -52,12 +52,12 @@ def print_error(error, verbose=False):
 
     if error.explanation:
         print(f"\n  {BLUE}{BOLD}Explanation:{RESET}")
-        wrapped=textwrap.fill(error.explanation,width=80)
-        for line in wrapped.split("\n"):
-            print(f"  {BLUE}{line}{RESET}")
+        for block in error.explanation.split("\n\n"):
+            wrapped = textwrap.fill(block, width=80)
+            print(f"  {BLUE}{wrapped}{RESET}\n")
 
     if error.suggestion:
-        print(f"\n  {GREEN}{BOLD}How to Fix:{RESET}")
+        print(f"\n  {GREEN}{BOLD}Suggestion:{RESET}")
         wrapped=textwrap.fill(error.suggestion,width=80)
         for line in wrapped.split("\n"):
             print(f"  {GREEN}{line}{RESET}")
@@ -102,6 +102,8 @@ def main():
         enrich_error(e)
         log_example(e)
 
+    #JSON mode
+
     if args.json:
         result={
             "status": "error",
@@ -113,6 +115,8 @@ def main():
 
         print(json.dumps(result, indent=2))
         return 1
+    
+    # Human readable output
 
     print(f"\n{len(errors)} issue(s) found:\n")
 
@@ -128,7 +132,6 @@ def main():
         print_error(e,verbose=args.verbose)
 
     print(f"{error_count} error(s), {warning_count} warning(s)")
-
     return 1 if error_count > 0 else 0
 
 if __name__ == "__main__":

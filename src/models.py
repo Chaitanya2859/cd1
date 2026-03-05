@@ -1,5 +1,5 @@
 class CompilerError:
-    def __init__(self, file, line, column, error_type, message, raw):
+    def __init__(self,file,line,column,error_type,message,raw):
         self.file=file
         self.line=line
         self.column=column
@@ -56,7 +56,7 @@ class CompilerError:
             start=self.context["start_line"]
 
             for i,line in enumerate(self.context["lines"],start=start):
-                marker="→" if i == self.line else " "
+                marker="→" if i==self.line else " "
                 parts.append(f"\n{i:4} {marker} {line.rstrip()}")
 
                 if i == self.line and self.column:

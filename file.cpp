@@ -2,7 +2,8 @@
 using namespace std;
 
 int add(int a, int b) {
-    a + b
+    a+b;
+    return 1
 }
 
 int main() {
