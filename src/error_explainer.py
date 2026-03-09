@@ -224,33 +224,41 @@ def explain_error(error)->Dict[str, Any]:
             "confidence":0.0
         }
 
-    ml_category = predict_error_category(error.message)
-    if ml_category == "unknown":
-        if re.search(r"expression result unused", error.message, re.IGNORECASE):
-            ml_category = "unused_expression"
-        elif re.search(r"expected\s+';" , error.message, re.IGNORECASE) or re.search(r"expected\s*';'", error.message, re.IGNORECASE):
-            ml_category = "missing_semicolon"
-        elif re.search(r"was not declared in this scope", error.message, re.IGNORECASE) or re.search(r"use of undeclared identifier", error.message, re.IGNORECASE):
-            ml_category = "undeclared_variable"
-        elif re.search(r"cannot convert", error.message, re.IGNORECASE) or re.search(r"invalid conversion", error.message, re.IGNORECASE) or re.search(r"narrowing conversion", error.message, re.IGNORECASE):
-            ml_category = "type_mismatch"
-        elif re.search(r"no matching function for call to", error.message, re.IGNORECASE) or re.search(r"candidate function not viable", error.message, re.IGNORECASE) or re.search(r"requires\s+\d+\s+argument", error.message, re.IGNORECASE):
-            ml_category = "function_mismatch"
-    mapped_category = {
-        "missing_semicolon":"Syntax",
-        "undeclared_variable":"Name Resolution",
-        "type_mismatch":"Type",
-        "function_mismatch":"Type",
-        "scope_error":"Name Resolution",
-    }.get(ml_category, None)
-
     classifier = get_default_classifier()
     category, confidence = classifier.predict(error.message)
-    if mapped_category:
-        category = mapped_category
-    min_confidence = 0.55
 
-    fine = explain_category(ml_category, error.message)
+    # Secondary regex fallbacks for definitive patterns if ML confidence is low
+    if confidence < 0.45:
+        if re.search(r"expression result unused", error.message, re.IGNORECASE):
+            category = "unused_expression"
+            confidence = 0.95
+        elif re.search(r"expected\s+';" , error.message, re.IGNORECASE) or re.search(r"expected\s*';'", error.message, re.IGNORECASE):
+            category = "missing_semicolon"
+            confidence = 0.95
+        elif re.search(r"was not declared in this scope", error.message, re.IGNORECASE) or re.search(r"use of undeclared identifier", error.message, re.IGNORECASE):
+            category = "undeclared_variable"
+            confidence = 0.95
+        elif re.search(r"cannot convert", error.message, re.IGNORECASE) or re.search(r"invalid conversion", error.message, re.IGNORECASE) or re.search(r"narrowing conversion", error.message, re.IGNORECASE):
+            category = "type_mismatch"
+            confidence = 0.9
+        elif re.search(r"no matching function for call to", error.message, re.IGNORECASE) or re.search(r"candidate function not viable", error.message, re.IGNORECASE) or re.search(r"requires\s+\d+\s+argument", error.message, re.IGNORECASE):
+            category = "function_mismatch"
+            confidence = 0.9
+
+    # Map fine-grained ML categories to high-level template categories
+    category_map = {
+        "missing_semicolon": "Syntax",
+        "undeclared_variable": "Name Resolution",
+        "type_mismatch": "Type",
+        "function_mismatch": "Type",
+        "unused_expression": "Warning",
+        "scope_error": "Name Resolution",
+    }
+    
+    template_category = category_map.get(category, category)
+    min_confidence = 0.35
+
+    fine = explain_category(category, error.message)
     if fine :
         explanation = fine["explanation"]
         suggestion = fine["suggestion"]
@@ -261,12 +269,12 @@ def explain_error(error)->Dict[str, Any]:
         return {
             "explanation":explanation,
             "suggestion":suggestion,
-            "category":ml_category,
+            "category":category,
             "confidence":confidence,
         }
 
-    if category and confidence>=min_confidence:
-        template = CATEGORY_TEMPLATES.get(category)
+    if template_category and confidence>=min_confidence:
+        template = CATEGORY_TEMPLATES.get(template_category)
         if template:
             explanation = template.get("explanation")
             suggestion = template.get("suggestion")
@@ -282,7 +290,7 @@ def explain_error(error)->Dict[str, Any]:
         return {
             "explanation":explanation,
             "suggestion":suggestion,
-            "category":category,
+            "category":template_category,
             "confidence":confidence,
         }
 

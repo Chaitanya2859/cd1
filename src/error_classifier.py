@@ -13,9 +13,6 @@ _DEFAULT_DATA_DIR = os.path.join(_PROJECT_ROOT, "data")
 _DEFAULT_TRAINING_DATA_FILE = os.path.join(_DEFAULT_DATA_DIR, "training_data.json")
 _DEFAULT_MODEL_FILE = os.path.join(_DEFAULT_DATA_DIR, "error_classifier.joblib")
 
-_VECTORIZER_FILE = os.path.join(_DEFAULT_DATA_DIR, "error_tfidf_vectorizer.joblib")
-_LOGREG_MODEL_FILE = os.path.join(_DEFAULT_DATA_DIR, "error_logreg_model.joblib")
-
 
 def _load_training_examples(training_data_file: str) -> Tuple[List[str], List[str]]:
     with open(training_data_file, "r") as f:
@@ -69,13 +66,15 @@ class ErrorClassifier:
                         lowercase=True,
                         ngram_range=(1, 2),
                         min_df=1,
+                        token_pattern=r"(?u)\b\w+\b|[;{}()\[\]+-/*=<>]"
                     ),
                 ),
                 (
                     "clf",
                     LogisticRegression(
-                        max_iter=1000,
-                        n_jobs=None,
+                        max_iter=2000,
+                        class_weight='balanced',
+                        solver='lbfgs'
                     ),
                 ),
             ]
@@ -138,26 +137,12 @@ def get_default_classifier() -> ErrorClassifier:
     return _default_classifier
 
 
-_cached_vectorizer: Optional[TfidfVectorizer] = None
-_cached_logreg: Optional[LogisticRegression] = None
+
 
 
 def predict_error_category(error_message: str) -> str:
-    global _cached_vectorizer
-    global _cached_logreg
-
-    if not error_message:
-        return "unknown"
-
-    if _cached_vectorizer is None or _cached_logreg is None:
-        if not os.path.exists(_VECTORIZER_FILE) or not os.path.exists(_LOGREG_MODEL_FILE):
-            return "unknown"
-        _cached_vectorizer = joblib.load(_VECTORIZER_FILE)
-        _cached_logreg = joblib.load(_LOGREG_MODEL_FILE)
-
-    X = _cached_vectorizer.transform([error_message])
-    pred = _cached_logreg.predict(X)[0]
-    return str(pred)
+    """Legacy predictor fallback; actual classification is in error_explainer.py."""
+    return "unknown"
 
 
 if __name__ == "__main__":

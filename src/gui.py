@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QSplitter, QPlainTextEdit, QTextEdit,
                              QPushButton, QFileDialog, QMessageBox, QLabel, QFrame,
                              QCheckBox, QDialog, QTreeWidget, QTreeWidgetItem)
-from PyQt6.QtCore import Qt, QRect, QSize, QThread, pyqtSignal, QTimer, QPropertyAnimation, QVariantAnimation, QEvent
+from PyQt6.QtCore import Qt, QRect, QSize, QThread, pyqtSignal, QTimer, QVariantAnimation
 from PyQt6.QtGui import QFont, QColor, QPainter, QTextFormat, QTextCharFormat, QSyntaxHighlighter, QTextCursor
 import platform
 
@@ -17,14 +17,14 @@ BG_COLOR = "#222131"
 PANE_BG = "#212030"           
 HEADER_BG = "#29273c"         
 BORDER_COLOR = "#474360"      
-PINK = "#d38dba"              
+PINK = "#d38dba"  
 TEXT_MAIN = "#b0adca"         
 TEXT_DIM = "#777492"          
 KEYWORD_COLOR = "#cf86af"     
 ERROR_LINE_COLOR = "#3c2a39" 
-RED = "#ff5555"               # Vibrant Red for Errors
-YELLOW = "#f1fa8c"            # Vibrant Yellow for Warnings
-GREEN = "#50fa7b"             # Vibrant Green for Fixes
+RED = "#ff5555"
+YELLOW = "#f1fa8c"
+GREEN = "#50fa7b"
 
 FONT_FAMILY = "Menlo" if platform.system() == "Darwin" else "Consolas"
 
@@ -55,7 +55,6 @@ class StyledButton(QPushButton):
 
     def _update_style(self, progress):
         if self.style_type == "outline_dim":
-            # Animate border color or background color 
             c = QColor(BORDER_COLOR)
             h = QColor(HEADER_BG)
             r = int(c.red() + (h.red() - c.red()) * progress)
@@ -276,8 +275,6 @@ class CustomFrame(QFrame):
     def set_title(self, title):
         self.header.setText(f" {title} ")
 
-
-# --- Worker Threads for Analysis and Running ---
 class CompilerWorker(QThread):
     finished = pyqtSignal(str, str, int)
 
@@ -356,8 +353,6 @@ class ASTViewerDialog(QDialog):
         
         self._populate(ast_tree, self.tree.invisibleRootItem())
         
-        # All nodes remain collapsed by default per user request
-        
         layout.addWidget(self.tree)
         
         btn_close = StyledButton(" CLOSE VIEWER ", "solid_pink")
@@ -371,7 +366,6 @@ class ASTViewerDialog(QDialog):
             item.setText(0, n["type"])
             item.setText(1, n["details"])
             
-            # Color logic
             if "Decl" in n["type"]:
                 item.setForeground(0, QColor(PINK))
             elif "Stmt" in n["type"]:
@@ -385,20 +379,6 @@ class ASTViewerDialog(QDialog):
             
             if n["children"]:
                 self._populate(n["children"], item)
-
-    def _expand_user_code(self):
-        root = self.tree.invisibleRootItem()
-        for i in range(root.childCount()):
-            item = root.child(i)
-            if "implicit" not in item.text(1).lower():
-                item.setExpanded(True)
-                self._expand_all_children(item)
-
-    def _expand_all_children(self, item):
-        for i in range(item.childCount()):
-            child = item.child(i)
-            child.setExpanded(True)
-            self._expand_all_children(child)
 
 
 class AppGUI(QMainWindow):
@@ -421,7 +401,6 @@ class AppGUI(QMainWindow):
         main_layout.setContentsMargins(15, 15, 15, 15)
         main_layout.setSpacing(15)
 
-        # -- HEADER --
         header_layout = QHBoxLayout()
         logo = QLabel("CppCheck Error Explainer")
         logo.setFont(QFont(FONT_FAMILY, 14, QFont.Weight.Bold))
@@ -430,7 +409,6 @@ class AppGUI(QMainWindow):
         header_layout.addStretch()
         main_layout.addLayout(header_layout)
 
-        # -- TOOLBAR --
         toolbar_layout = QHBoxLayout()
         toolbar_layout.setSpacing(10)
 
@@ -467,24 +445,20 @@ class AppGUI(QMainWindow):
         toolbar_layout.addStretch()
         main_layout.addLayout(toolbar_layout)
 
-        # -- PANES (Splitter) --
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         self.splitter.setStyleSheet(f"QSplitter::handle {{ background-color: {BG_COLOR}; }}")
         main_layout.addWidget(self.splitter, 1)
 
-        # Left Pane (Code Editor)
         self.pane_left = CustomFrame("<> " + self.file_name.upper())
         self.editor = CodeEditor()
         self.highlighter = CppSyntaxHighlighter(self.editor.document())
         self.pane_left.content_layout.addWidget(self.editor)
         self.splitter.addWidget(self.pane_left)
 
-        # Right Panes (Splitter Vertically)
         self.v_splitter = QSplitter(Qt.Orientation.Vertical)
         self.v_splitter.setStyleSheet(f"QSplitter::handle {{ background-color: {BG_COLOR}; }}")
         self.splitter.addWidget(self.v_splitter)
 
-        # Right Top Pane (AI Message Log)
         self.pane_right_top = CustomFrame("MESSAGE LOG :: FIX SUGGESTION", left_padding=True)
         self.ai_log = QTextEdit()
         self.ai_log.setReadOnly(True)
@@ -494,7 +468,6 @@ class AppGUI(QMainWindow):
         
         self.v_splitter.addWidget(self.pane_right_top)
 
-        # Right Bottom Pane (Compiler Output)
         self.pane_right_bottom = CustomFrame("COMPILER OUTPUT :: SYSTEM TERMINAL", left_padding=True)
         self.compiler_log = QTextEdit()
         self.compiler_log.setReadOnly(True)
@@ -506,7 +479,6 @@ class AppGUI(QMainWindow):
         self.splitter.setSizes([700, 650])
         self.v_splitter.setSizes([500, 250])
 
-        # -- FOOTER (Status Bar) --
         footer_layout = QHBoxLayout()
         self.status_bar_left = QLabel("Compiler: GCC 11.4 | Language: C++17 | Errors: 1 | Warnings: 0 | File Name: file.cpp")
         self.status_bar_left.setFont(QFont(FONT_FAMILY, 10, QFont.Weight.Bold))
@@ -526,7 +498,6 @@ class AppGUI(QMainWindow):
         self.editor.set_error_line(None)
         self._update_footer()
 
-        # Loading animation
         self.loading_timer = QTimer(self)
         self.loading_timer.timeout.connect(self._animate_loading)
         self.loading_dots = 0
@@ -538,7 +509,6 @@ class AppGUI(QMainWindow):
         self.status_bar_left.setText(text)
 
     def _animate_loading(self):
-        # Strawberry "bouncing" animation
         frames = ["🍓      ", " 🍓     ", "  🍓    ", "   🍓   ", "    🍓  ", "     🍓 ", "      🍓", "     🍓 ", "    🍓  ", "   🍓   ", "  🍓    ", " 🍓     "]
         self.loading_dots = (self.loading_dots + 1) % len(frames)
         frame = frames[self.loading_dots]
@@ -559,7 +529,6 @@ class AppGUI(QMainWindow):
         self.loading_prefix = "STATUS: ● EXECUTING BINARY "
         self.loading_timer.start(300)
 
-        # Start runner thread
         self.runner_thread = RunnerWorker(["./a.out"])
         self.runner_thread.finished.connect(self._on_run_finished)
         self.runner_thread.start()
@@ -589,8 +558,6 @@ class AppGUI(QMainWindow):
         self.loading_prefix = "STATUS: ● PARSING AST "
         self.loading_timer.start(300)
         
-        # We run this in a thread ideally, but for now let's just call it
-        # as it's usually fast with -fsyntax-only
         ast_text = extract_ast(self.file_path)
         self.loading_timer.stop()
         
@@ -604,48 +571,6 @@ class AppGUI(QMainWindow):
         
         dialog = ASTViewerDialog(tree_data, self)
         dialog.exec()
-
-    def _set_mockup_state(self):
-        self.editor.set_error_line(10) 
-        
-        ai_html = f"""
-        <div style="margin-bottom: 20px;">
-            <span style="color:{RED}; font-weight:bold;">ISSUE DETECTED: MISSING SEMICOLON</span><br>
-            <span style="display:inline-block; border:1px solid {RED}; padding:2px 6px; border-radius:3px; font-size:10px; color:{RED}; margin-top:5px; margin-right:10px;">CAT: SYNTAX_ERROR</span>
-            <span style="font-size:10px; color:{TEXT_DIM};">CONFIDENCE: 98.4%</span><br><br>
-            
-            I found a syntax error in <span style="color:{RED};">{self.file_name}</span> at line 10.<br><br>
-            
-            <div style="background-color:{BG_COLOR}; border:1px solid {BORDER_COLOR}; padding:15px; margin: 10px 0px; font-family:'{FONT_FAMILY}';">
-                <span style="color:{TEXT_DIM};">Expected: </span><span style="color:{TEXT_MAIN};">; before 'for'</span><br>
-                <span style="color:{TEXT_DIM};">Found: </span><span style="color:{TEXT_MAIN};">std::cout << numbers[5]</span>
-            </div>
-            
-            <br>
-            You forgot the terminator character. In C++, every expression statement must end with a semicolon.
-            <br><br>
-            <span style="color:{TEXT_DIM}; font-size:11px;">↺ ANALYZING MEMORY SAFETY...</span>
-        </div>
-        """
-        self.ai_log.setHtml(ai_html)
-        
-        compiler_plain = f"""[ERROR] {self.file_name}:10:28: error: expected ';' before 'for'
-    std::cout << numbers[5]
-    ^
-
-[WARNING] {self.file_name}:10:30: warning: iteration 5 invokes
-undefined behavior [-Warray-bounds]
-    std::vector only has 3 elements.
-
-C++_ANALYZER_V2.0.1_READY > _"""
-        
-        formatted = compiler_plain.replace("[ERROR]", f"<span style='color:{RED};'>[ERROR]</span>")
-        formatted = formatted.replace("error:", f"<span style='color:{RED};'>error:</span>")
-        formatted = formatted.replace("[WARNING]", f"<span style='color:{YELLOW};'>[WARNING]</span>")
-        formatted = formatted.replace("warning:", f"<span style='color:{YELLOW};'>warning:</span>")
-        self.compiler_log.setHtml(f"<div style='white-space:pre-wrap; font-family:{FONT_FAMILY};'>{formatted}</div>")
-
-        self._update_footer()
 
     def load_file(self):
         filename, _ = QFileDialog.getOpenFileName(self, "Open C++ Source File", "", "C/C++ Files (*.cpp *.cc *.c *.h *.hpp);;All Files (*)")
@@ -761,8 +686,9 @@ C++_ANALYZER_V2.0.1_READY > _"""
                     <span style="color:{TEXT_MAIN};">{expl}</span>
                 </div><br>
                 """
+
             if sugg:
-                ai_html += f"<div style='color:{GREEN}; font-weight:bold; margin-bottom:5px;'>HOW TO FIX:</div>"
+                ai_html += f"<div style='color:{GREEN}; font-weight:bold; margin-bottom:5px;'>SUGGESTION:</div>"
                 ai_html += f"<span style='color:{TEXT_MAIN}'>{sugg}</span><br>"
             if e.get("security_risk"):
                 ai_html += f"<br><span style='color:{TEXT_DIM}'>SECURITY RISK: {e.get('security_risk')}</span>"

@@ -39,7 +39,7 @@
     "explanation": "What happened:\n An expression was evaluated, but its result wasn\u2019t used for anything.\n\nWhy it happened:\n This often happens when you write something like `a + b;` intending to assign or return the value, but you never store it.\n\nHow to fix it:\n Assign the result (e.g., `x = a + b;`), return it (`return a + b;`), or remove the expression if it\u2019s not needed. This error occurred inside a col.",
     "suggestion": "Use the expression result (assign/return) or remove it.",
     "confidence": 0.6424715410234678,
-    "context": {
+    "context":{
       "start_line": 3,
       "lines": [
         "\n",
