@@ -680,6 +680,25 @@ class AppGUI(QMainWindow):
             
             expl = e.get("explanation", "").replace('\n', '<br>')
             sugg = e.get("suggestion", "").replace('\n', '<br>')
+
+            # Show the context line in the AI log too
+            context = e.get("context", {})
+            lines = context.get("lines", [])
+            start = context.get("start_line", 1)
+            
+            error_snippet = ""
+            if line != "?" and lines and type(lines) == list:
+                idx = int(line) - start
+                if 0 <= idx < len(lines):
+                    error_snippet = lines[idx].strip()
+
+            if error_snippet:
+                ai_html += f"""
+                <div style="background-color:{BG_COLOR}; border: 1px solid {BORDER_COLOR}; border-left: 4px solid {tag_color}; padding:10px; font-family:'{FONT_FAMILY}'; font-size:13px; margin-bottom:10px;">
+                    <span style="color:{TEXT_DIM}">{line} | </span><span style="color:{TEXT_MAIN}">{error_snippet.replace('<','&lt;').replace('>','&gt;')}</span>
+                </div>
+                """
+
             if expl:
                 ai_html += f"""
                 <div style="background-color:{BG_COLOR}; border:1px solid {BORDER_COLOR}; padding:15px; margin: 10px 0px; font-family:'{FONT_FAMILY}';">
@@ -696,14 +715,15 @@ class AppGUI(QMainWindow):
             
             compiler_html += f"<span style='color:{tag_color};'>[{etype.upper()}]</span> {os.path.basename(file_name)}:{line}:{col}: <span style='color:{tag_color};'>{etype}:</span> {msg}<br>"
             
-            context = e.get("context", {})
-            lines = context.get("lines", [])
-            start = context.get("start_line", 1)
             if lines and type(lines) == list:
                 for i, lt in enumerate(lines, start=start):
-                    if i == line:
-                        compiler_html += f"    {lt.replace('<','&lt;').replace('>','&gt;').rstrip()}<br>"
-                        compiler_html += f"    {'^':>{col}}<br>" if col != "?" else ""
+                    txt = lt.replace('<','&lt;').replace('>','&gt;').rstrip()
+                    if i == int(line) if line != "?" else False:
+                        compiler_html += f" <span style='color:{tag_color};'>&gt;</span> {i:3} | <b style='color:{TEXT_MAIN}'>{txt}</b><br>"
+                        if col != "?":
+                            compiler_html += f"       {' ' * (len(str(i)) + 2 + int(col))}<span style='color:{tag_color}'>^</span><br>"
+                    else:
+                        compiler_html += f"   {i:3} | <span style='color:{TEXT_DIM}'>{txt}</span><br>"
             compiler_html += "<br>"
 
         self.editor.set_error_line(first_err_line)

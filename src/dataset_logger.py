@@ -10,10 +10,10 @@ def log_example(error)->None:
     entry={
         "message":error.message,
         "category":error.category,
+        "ast_node":getattr(error, "ast_node", ""),
         "explanation":error.explanation,
         "suggestion":error.suggestion,
         "confidence":error.confidence,
-        "context":error.context
     }
 
     data=[]

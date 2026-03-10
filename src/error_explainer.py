@@ -115,14 +115,27 @@ def extract_tokens(message:str)->Dict[str,Optional[str]]:
 def explain_category(category:str, message:str) -> Optional[Dict[str, str]]:
     t = extract_tokens(message)
 
-    if category=="missing_semicolon":
-        expected=t.get("expected_token") or ";"
-        what=f"The compiler expected a statement terminator ({expected}), but it wasn’t found where it needed one."
-        why="In C/C++, most statements must end with a semicolon. If it’s missing, the parser gets out of sync and reports an error at the next token."
-        how="Add the missing semicolon at the end of the statement (often the line just before the reported location)."
+    if category=="syntax_error":
+        expected=t.get("expected_token")
+        if expected:
+            what=f"The compiler expected a {expected}, but it wasn’t found where it was needed."
+            if "semicolon" in message.lower() or expected == ";":
+                why="In C/C++, most statements must end with a semicolon. If it’s missing, the parser gets out of sync."
+                how="Add the missing semicolon at the end of the statement."
+            elif "identifier" in message.lower():
+                why="The compiler expected a name (like a variable or function name) but found something else or nothing."
+                how="Provide a valid identifier at the reported location."
+            else:
+                why="The code violates C++ grammar rules at this location."
+                how=f"Check the code near the error and ensure it follows the expected pattern for a {expected}."
+        else:
+            what="The compiler encountered a syntax error that it couldn't specifically identify."
+            why="This usually happens due to missing tokens, misplaced brackets, or invalid expressions."
+            how="Carefully check the reported line and the line immediately above it for typos."
+            
         return {
             "explanation":format_error(what, why, how),
-            "suggestion":"Add the missing ';' and recompile.",
+            "suggestion":f"Fix the syntax error near the reported location (check for missing '{expected or 'tokens'}').",
         }
     
     if "break" in message and "not in loop" in message:
@@ -135,16 +148,17 @@ def explain_category(category:str, message:str) -> Optional[Dict[str, str]]:
             "suggestion":"Ensure 'break' is inside a loop or switch block.",
         }
 
-    if category == "unused_expression":
-        what = "An expression was evaluated, but its result wasn’t used for anything."
-        why = "This often happens when you write something like `a + b;` intending to assign or return the value, but you never store it."
-        how = "Assign the result (e.g., `x = a + b;`), return it (`return a + b;`), or remove the expression if it’s not needed."
-        return {
-            "explanation":format_error(what, why, how),
-            "suggestion":"Use the expression result (assign/return) or remove it.",
-        }
+    if category == "warning":
+        if "unused" in message.lower():
+            what = "An expression or variable was evaluated/declared, but its result wasn’t used for anything."
+            why = "This often happens when you write something like `a + b;` intending to assign or return the value, but you never store it."
+            how = "Assign the result (e.g., `x = a + b;`), return it (`return a + b;`), or remove it if it’s not needed."
+            return {
+                "explanation":format_error(what, why, how),
+                "suggestion":"Use the result (assign/return) or remove it.",
+            }
 
-    if category == "undeclared_variable":
+    if category == "name_resolution":
         name = t.get("identifier")
         quoted = f"'{name}'" if name else "the identifier"
         what = f"You used {quoted}, but the compiler doesn’t know what it refers to in this scope."
@@ -155,21 +169,23 @@ def explain_category(category:str, message:str) -> Optional[Dict[str, str]]:
             "suggestion":"Declare the identifier before use (or include the right header) and recompile.",
         }
 
-    if category == "type_mismatch":
+    if category == "type_error":
         ft = t.get("from_type")
         tt = t.get("to_type")
         if ft and tt:
             what = f"A value of type '{ft}' is being used where a '{tt}' is required."
+        elif "operands" in message.lower():
+            what = "You are using an operator with incompatible types."
         else:
             what = "Two parts of an expression have incompatible types."
-        why = "C++ only allows implicit conversions in some cases. When there’s no safe conversion, the compiler rejects the operation."
+        why = "C++ has strict rules about how different types can interact. When there’s no safe conversion, the compiler rejects the operation."
         how = "Change the variable types to match, adjust the expression, or use an explicit cast only if it’s logically safe."
         return {
             "explanation":format_error(what, why, how),
-            "suggestion":"Make the operand/variable types compatible (or add a safe explicit cast).",
+            "suggestion":"Make the operand types compatible (or add a safe explicit cast).",
         }
 
-    if category=="function_mismatch":
+    if category=="function_error":
         fn=t.get("function")
         exp=t.get("arg_expected")
         got=t.get("arg_provided")
@@ -225,34 +241,44 @@ def explain_error(error)->Dict[str, Any]:
         }
 
     classifier = get_default_classifier()
-    category, confidence = classifier.predict(error.message)
+    ast_node = getattr(error, "ast_node", "")
+    category, confidence = classifier.predict(error.message, ast_node=ast_node)
 
     # Secondary regex fallbacks for definitive patterns if ML confidence is low
     if confidence < 0.45:
         if re.search(r"expression result unused", error.message, re.IGNORECASE):
-            category = "unused_expression"
+            category = "warning"
             confidence = 0.95
-        elif re.search(r"expected\s+';" , error.message, re.IGNORECASE) or re.search(r"expected\s*';'", error.message, re.IGNORECASE):
-            category = "missing_semicolon"
+        elif re.search(r"expected\s+';", error.message, re.IGNORECASE) or re.search(r"expected\s*';'", error.message, re.IGNORECASE):
+            category = "syntax_error"
             confidence = 0.95
         elif re.search(r"was not declared in this scope", error.message, re.IGNORECASE) or re.search(r"use of undeclared identifier", error.message, re.IGNORECASE):
-            category = "undeclared_variable"
+            category = "name_resolution"
             confidence = 0.95
         elif re.search(r"cannot convert", error.message, re.IGNORECASE) or re.search(r"invalid conversion", error.message, re.IGNORECASE) or re.search(r"narrowing conversion", error.message, re.IGNORECASE):
-            category = "type_mismatch"
+            category = "type_error"
             confidence = 0.9
         elif re.search(r"no matching function for call to", error.message, re.IGNORECASE) or re.search(r"candidate function not viable", error.message, re.IGNORECASE) or re.search(r"requires\s+\d+\s+argument", error.message, re.IGNORECASE):
-            category = "function_mismatch"
+            category = "function_error"
+            confidence = 0.9
+        elif re.search(r"expected primary-expression", error.message, re.IGNORECASE) or re.search(r"expected expression", error.message, re.IGNORECASE) or re.search(r"expected ';'", error.message, re.IGNORECASE) or re.search(r"expected identifier", error.message, re.IGNORECASE) or re.search(r"invalid use of", error.message, re.IGNORECASE):
+            category = "syntax_error"
+            confidence = 0.9
+        elif re.search(r"invalid operands", error.message, re.IGNORECASE):
+            category = "type_error"
+            confidence = 0.9
+        elif re.search(r"expected '\)'", error.message, re.IGNORECASE):
+            category = "syntax_error"
             confidence = 0.9
 
     # Map fine-grained ML categories to high-level template categories
     category_map = {
-        "missing_semicolon": "Syntax",
-        "undeclared_variable": "Name Resolution",
-        "type_mismatch": "Type",
-        "function_mismatch": "Type",
-        "unused_expression": "Warning",
-        "scope_error": "Name Resolution",
+        "syntax_error": "Syntax",
+        "name_resolution": "Name Resolution",
+        "type_error": "Type",
+        "function_error": "Type",
+        "warning": "Warning",
+        "linker_error": "Linker",
     }
     
     template_category = category_map.get(category, category)

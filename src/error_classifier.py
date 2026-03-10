@@ -5,7 +5,7 @@ from typing import Optional, Tuple, List
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import Pipeline, FeatureUnion
 
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -29,9 +29,12 @@ def _load_training_examples(training_data_file: str) -> Tuple[List[str], List[st
             continue
         msg = row.get("message")
         cat = row.get("category")
+        ast = row.get("ast_node", "")
         if not msg or not cat:
             continue
-        messages.append(str(msg))
+        
+        feature_str = f"{ast} {msg}".strip()
+        messages.append(feature_str)
         labels.append(str(cat))
 
     return messages, labels
@@ -61,13 +64,28 @@ class ErrorClassifier:
         pipeline = Pipeline(
             steps=[
                 (
-                    "tfidf",
-                    TfidfVectorizer(
-                        lowercase=True,
-                        ngram_range=(1, 2),
-                        min_df=1,
-                        token_pattern=r"(?u)\b\w+\b|[;{}()\[\]+-/*=<>]"
-                    ),
+                    "features",
+                    FeatureUnion([
+                        (
+                            "word",
+                            TfidfVectorizer(
+                                lowercase=True,
+                                ngram_range=(1, 3),
+                                min_df=2,
+                                max_df=0.9,
+                                token_pattern=r"(?u)\b\w+\b|[;{}()\[\]+-/*=<>]"
+                            ),
+                        ),
+                        (
+                            "char",
+                            TfidfVectorizer(
+                                analyzer="char",
+                                ngram_range=(3, 5),
+                                min_df=2,
+                                max_df=0.9,
+                            ),
+                        ),
+                    ])
                 ),
                 (
                     "clf",
@@ -101,7 +119,7 @@ class ErrorClassifier:
         self.train()
         self.save()
 
-    def predict(self, message: str) -> Tuple[Optional[str], float]:
+    def predict(self, message: str, ast_node: str = "") -> Tuple[Optional[str], float]:
         if not message:
             return None, 0.0
 
@@ -117,13 +135,14 @@ class ErrorClassifier:
 
         assert self._pipeline is not None
 
+        feature_str = f"{ast_node} {message}".strip()
         try:
-            proba = self._pipeline.predict_proba([message])
+            proba = self._pipeline.predict_proba([feature_str])
             pred = self._pipeline.classes_[int(proba[0].argmax())]
             confidence = float(proba[0].max())
             return str(pred), confidence
         except Exception:
-            pred = self._pipeline.predict([message])[0]
+            pred = self._pipeline.predict([feature_str])[0]
             return str(pred), 0.5
 
 

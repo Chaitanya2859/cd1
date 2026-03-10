@@ -2,12 +2,8 @@
 #include <iostream>
 using namespace std;
 
-int add(int a, int b) {
-    a+b;
-    return 1;
-}
-
 int main() {
-    cout << add(2, 3);
+    const int x=5;
+    x=10;
     return 0;
 }
