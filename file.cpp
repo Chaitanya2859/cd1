@@ -1,9 +1,8 @@
 // Enter your C++ code here
-#include <iostream>
+#include<iostream>
 using namespace std;
+int main(){
 
-int main() {
-    const int x=5;
-    x=10;
-    return 0;
+int x=2;
+return x;
 }

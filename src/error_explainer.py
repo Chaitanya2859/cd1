@@ -305,10 +305,10 @@ def explain_error(error)->Dict[str, Any]:
             explanation = template.get("explanation")
             suggestion = template.get("suggestion")
         else:
-            explanation = "The compiler reported an error in this category."
-            suggestion = "Inspect the highlighted line and surrounding code to resolve the issue."
+            explanation="The compiler reported an error in this category."
+            suggestion="Inspect the highlighted line and surrounding code to resolve the issue."
 
-        node = getattr(error, "ast_node", None)
+        node = getattr(error,"ast_node", None)
         if node:
             explanation += f" This error occurred inside a {node}."
             confidence = min(1.0, confidence + 0.05)

@@ -10,6 +10,8 @@ from error_parser import parse_errors
 from error_explainer import enrich_error
 from dataset_logger import log_example
 from ast_extractor import extract_ast, extract_node_near_line
+from auto_fixer import generate_fix
+from smart_error_solver import solve_error
 
 RED="\033[91m"
 YELLOW="\033[93m"
@@ -62,6 +64,11 @@ def print_error(error, verbose=False):
         for line in wrapped.split("\n"):
             print(f"  {GREEN}{line}{RESET}")
 
+    if hasattr(error, "auto_fix") and error.auto_fix:
+        print(f"\n  {BLUE}{BOLD}AUTO FIX:{RESET}")
+        print(f"  {BLUE}Original: {error.auto_fix['original']}{RESET}")
+        print(f"  {GREEN}Fixed: {error.auto_fix['fixed']}{RESET}")
+
     if hasattr(error, "security_risk"):
         print(f"\n  {YELLOW}{BOLD}Security Assessment:{RESET}")
         print(f"  {YELLOW}Risk Level: {error.security_risk}{RESET}")
@@ -92,6 +99,12 @@ def main():
     errors=parse_errors(output)
     ast_text=extract_ast(args.source_file)
 
+    try:
+        with open(args.source_file, "r", encoding="utf-8") as f:
+            source_lines = f.read().split("\n")
+    except Exception:
+        source_lines = []
+
     for e in errors:
 
         if e.line:
@@ -100,6 +113,18 @@ def main():
             e.ast_node=None
 
         enrich_error(e)
+        
+        # Apply smart error solver
+        smart_res = solve_error(e, source_lines, getattr(e, "ast_node", None))
+        if smart_res and smart_res["category"] != "Unknown":
+            e.category = smart_res["category"]
+            e.explanation = smart_res["explanation"]
+            e.suggestion = smart_res["suggestion"]
+            e.confidence = smart_res["confidence"]
+            e.auto_fix = smart_res.get("possible_fix")
+        else:
+            e.auto_fix = generate_fix(e, source_lines)
+            
         log_example(e)
 
     #JSON mode

@@ -13,8 +13,8 @@ import platform
 
 from ast_extractor import extract_ast, extract_node_near_line, parse_ast_to_tree
 
-BG_COLOR = "#222131"          
-PANE_BG = "#212030"           
+BG_COLOR = "#222131"         
+PANE_BG = "#06060E"           
 HEADER_BG = "#29273c"         
 BORDER_COLOR = "#474360"      
 PINK = "#d38dba"  
@@ -132,6 +132,29 @@ class CodeEditor(QPlainTextEdit):
         self.setFont(QFont(FONT_FAMILY, 13))
         self.setStyleSheet(f"QPlainTextEdit {{ background-color: {PANE_BG}; color: {TEXT_MAIN}; border: none; }}")
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
+        
+        # Set tab distance explicitly to 4 spaces instead of default 8
+        self.setTabStopDistance(self.fontMetrics().horizontalAdvance(' ') * 4)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Backspace:
+            modifiers = event.modifiers()
+            
+            # Command + Delete -> Delete to Start of Line
+            if modifiers == Qt.KeyboardModifier.MetaModifier:
+                cursor = self.textCursor()
+                cursor.movePosition(QTextCursor.MoveOperation.StartOfLine, QTextCursor.MoveMode.KeepAnchor)
+                cursor.removeSelectedText()
+                return
+                
+            # Control + Delete or Option + Delete -> Delete Previous Word
+            elif modifiers == Qt.KeyboardModifier.ControlModifier or modifiers == Qt.KeyboardModifier.AltModifier:
+                cursor = self.textCursor()
+                cursor.movePosition(QTextCursor.MoveOperation.PreviousWord, QTextCursor.MoveMode.KeepAnchor)
+                cursor.removeSelectedText()
+                return
+
+        super().keyPressEvent(event)
 
     def set_error_line(self, line):
         self.error_line = line
@@ -709,6 +732,18 @@ class AppGUI(QMainWindow):
             if sugg:
                 ai_html += f"<div style='color:{GREEN}; font-weight:bold; margin-bottom:5px;'>SUGGESTION:</div>"
                 ai_html += f"<span style='color:{TEXT_MAIN}'>{sugg}</span><br>"
+                
+            auto_fix = e.get("auto_fix")
+            if auto_fix:
+                ai_html += f"<div style='color:{PINK}; font-weight:bold; margin-top:10px; margin-bottom:5px;'>AUTO FIX:</div>"
+                ai_html += f"<div style='color:{TEXT_MAIN}; font-size:12px; margin-bottom:5px;'>{auto_fix.get('description', '')}</div>"
+                ai_html += f"<div style='padding:10px; margin: 10px 0px; font-family:\"{FONT_FAMILY}\"; font-size: 13px;'>"
+                orig = auto_fix.get('original', '').replace('<','&lt;').replace('>','&gt;')
+                fixed = auto_fix.get('fixed', '').replace('<','&lt;').replace('>','&gt;')
+                ai_html += f"<div style='color:{RED}; margin-bottom:5px;'>- {orig}</div>"
+                ai_html += f"<div style='color:{GREEN};'>+ {fixed}</div>"
+                ai_html += "</div><br>"
+
             if e.get("security_risk"):
                 ai_html += f"<br><span style='color:{TEXT_DIM}'>SECURITY RISK: {e.get('security_risk')}</span>"
             ai_html += "</div>"

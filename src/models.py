@@ -12,6 +12,7 @@ class CompilerError:
         self.context=None
         self.category=None
         self.confidence=0.0
+        self.auto_fix=None
 
     def to_dict(self):
         return {
@@ -25,6 +26,7 @@ class CompilerError:
             "context":self.context,
             "category":self.category,
             "confidence":self.confidence,
+            "auto_fix":self.auto_fix,
         }
     
     def __str__(self):

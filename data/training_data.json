@@ -1,0 +1,234 @@
+[
+  {
+    "message": "cannot assign to variable 'x' with const-qualified type 'const int'",
+    "category": "type_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n Two parts of an expression have incompatible types.\n\nWhy it happened:\n C++ has strict rules about how different types can interact. When there\u2019s no safe conversion, the compiler rejects the operation.\n\nHow to fix it:\n Change the variable types to match, adjust the expression, or use an explicit cast only if it\u2019s logically safe. This error occurred inside a col.",
+    "suggestion": "Make the operand types compatible (or add a safe explicit cast).",
+    "confidence": 0.3353679463580064
+  },
+  {
+    "message": "expected ';' at end of declaration",
+    "category": "syntax_error",
+    "ast_node": "line",
+    "explanation": "What happened:\n The compiler expected a ;, but it wasn\u2019t found where it was needed.\n\nWhy it happened:\n In C/C++, most statements must end with a semicolon. If it\u2019s missing, the parser gets out of sync.\n\nHow to fix it:\n Add the missing semicolon at the end of the statement. This error occurred inside a line.",
+    "suggestion": "Fix the syntax error near the reported location (check for missing ';').",
+    "confidence": 0.5278742606281673
+  },
+  {
+    "message": "use of undeclared identifier 'x'",
+    "category": "name_resolution",
+    "ast_node": null,
+    "explanation": "What happened:\n You used 'x', but the compiler doesn\u2019t know what it refers to in this scope.\n\nWhy it happened:\n This happens when a variable/function isn\u2019t declared yet, is declared in a different scope, or a header/namespace is missing.\n\nHow to fix it:\n Declare it before use, include the correct header, and verify spelling and namespace qualifiers.",
+    "suggestion": "Declare the identifier before use (or include the right header) and recompile.",
+    "confidence": 0.5777442398872591
+  },
+  {
+    "message": "use of undeclared identifier 'y'",
+    "category": "name_resolution",
+    "ast_node": null,
+    "explanation": "What happened:\n You used 'y', but the compiler doesn\u2019t know what it refers to in this scope.\n\nWhy it happened:\n This happens when a variable/function isn\u2019t declared yet, is declared in a different scope, or a header/namespace is missing.\n\nHow to fix it:\n Declare it before use, include the correct header, and verify spelling and namespace qualifiers.",
+    "suggestion": "Declare the identifier before use (or include the right header) and recompile.",
+    "confidence": 0.5777442398872591
+  },
+  {
+    "message": "cannot initialize a variable of type 'int *' with an rvalue of type 'int'",
+    "category": "name_resolution",
+    "ast_node": "col",
+    "explanation": "What happened:\n You used the identifier, but the compiler doesn\u2019t know what it refers to in this scope.\n\nWhy it happened:\n This happens when a variable/function isn\u2019t declared yet, is declared in a different scope, or a header/namespace is missing.\n\nHow to fix it:\n Declare it before use, include the correct header, and verify spelling and namespace qualifiers. This error occurred inside a col.",
+    "suggestion": "Declare the identifier before use (or include the right header) and recompile.",
+    "confidence": 0.32508053829272987
+  },
+  {
+    "message": "no matching function for call to 'foo'",
+    "category": "function_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n No available overload of 'foo' matches the arguments you provided.\n\nWhy it happened:\n Function overload resolution depends on the number and types of arguments. If none match, the compiler can\u2019t choose a function to call.\n\nHow to fix it:\n Check the function signature, pass the correct number/type of arguments, or add/adjust an overload that matches your call. This error occurred inside a col.",
+    "suggestion": "Fix the call to match an existing signature (or implement an overload).",
+    "confidence": 0.6486009424219923
+  },
+  {
+    "message": "expression result unused [-Wunused-value]",
+    "category": "warning",
+    "ast_node": "col",
+    "explanation": "What happened:\n An expression or variable was evaluated/declared, but its result wasn\u2019t used for anything.\n\nWhy it happened:\n This often happens when you write something like `a + b;` intending to assign or return the value, but you never store it.\n\nHow to fix it:\n Assign the result (e.g., `x = a + b;`), return it (`return a + b;`), or remove it if it\u2019s not needed. This error occurred inside a col.",
+    "suggestion": "Use the result (assign/return) or remove it.",
+    "confidence": 1.0
+  },
+  {
+    "message": "'break' statement not in loop or switch statement",
+    "category": "name_resolution",
+    "ast_node": null,
+    "explanation": "What happened:\n You used a 'break' statement outside of a loop or switch block.\n\nWhy it happened:\n In C++, 'break' can only appear inside loops (for, while, do-while) or switch statements.\n\nHow to fix it:\n Move the 'break' inside a valid loop/switch, or remove it if unnecessary.",
+    "suggestion": "Ensure 'break' is inside a loop or switch block.",
+    "confidence": 0.298628204907508
+  },
+  {
+    "message": "'continue' statement not in loop statement",
+    "category": "name_resolution",
+    "ast_node": null,
+    "explanation": "What happened:\n You used the identifier, but the compiler doesn\u2019t know what it refers to in this scope.\n\nWhy it happened:\n This happens when a variable/function isn\u2019t declared yet, is declared in a different scope, or a header/namespace is missing.\n\nHow to fix it:\n Declare it before use, include the correct header, and verify spelling and namespace qualifiers.",
+    "suggestion": "Declare the identifier before use (or include the right header) and recompile.",
+    "confidence": 0.3017904597476218
+  },
+  {
+    "message": "implicit conversion from 'double' to 'int' changes value from 3.14 to 3 [-Wliteral-conversion]",
+    "category": "function_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n No available overload of the function matches the arguments you provided.\n\nWhy it happened:\n Function overload resolution depends on the number and types of arguments. If none match, the compiler can\u2019t choose a function to call.\n\nHow to fix it:\n Check the function signature, pass the correct number/type of arguments, or add/adjust an overload that matches your call. This error occurred inside a col.",
+    "suggestion": "Fix the call to match an existing signature (or implement an overload).",
+    "confidence": 0.3469377396790036
+  },
+  {
+    "message": "array subscript is not an integer",
+    "category": "name_resolution",
+    "ast_node": null,
+    "explanation": "What happened:\n You used the identifier, but the compiler doesn\u2019t know what it refers to in this scope.\n\nWhy it happened:\n This happens when a variable/function isn\u2019t declared yet, is declared in a different scope, or a header/namespace is missing.\n\nHow to fix it:\n Declare it before use, include the correct header, and verify spelling and namespace qualifiers.",
+    "suggestion": "Declare the identifier before use (or include the right header) and recompile.",
+    "confidence": 0.2980861531140163
+  },
+  {
+    "message": "cast to 'int *' from smaller integer type 'int' [-Wint-to-pointer-cast]",
+    "category": "type_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n Two parts of an expression have incompatible types.\n\nWhy it happened:\n C++ has strict rules about how different types can interact. When there\u2019s no safe conversion, the compiler rejects the operation.\n\nHow to fix it:\n Change the variable types to match, adjust the expression, or use an explicit cast only if it\u2019s logically safe. This error occurred inside a col.",
+    "suggestion": "Make the operand types compatible (or add a safe explicit cast).",
+    "confidence": 0.3141392262725135
+  },
+  {
+    "message": "invalid operands to binary expression ('int' and 'string' (aka 'basic_string<char>'))",
+    "category": "type_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n You are using an operator with incompatible types.\n\nWhy it happened:\n C++ has strict rules about how different types can interact. When there\u2019s no safe conversion, the compiler rejects the operation.\n\nHow to fix it:\n Change the variable types to match, adjust the expression, or use an explicit cast only if it\u2019s logically safe. This error occurred inside a col.",
+    "suggestion": "Make the operand types compatible (or add a safe explicit cast).",
+    "confidence": 0.9500000000000001
+  },
+  {
+    "message": "cannot initialize return object of type 'int' with an lvalue of type 'const char[6]'",
+    "category": "type_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n Two parts of an expression have incompatible types.\n\nWhy it happened:\n C++ has strict rules about how different types can interact. When there\u2019s no safe conversion, the compiler rejects the operation.\n\nHow to fix it:\n Change the variable types to match, adjust the expression, or use an explicit cast only if it\u2019s logically safe. This error occurred inside a col.",
+    "suggestion": "Make the operand types compatible (or add a safe explicit cast).",
+    "confidence": 0.35237150355962016
+  },
+  {
+    "message": "cannot initialize a variable of type 'int' with an rvalue of type 'void'",
+    "category": "type_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n Two parts of an expression have incompatible types.\n\nWhy it happened:\n C++ has strict rules about how different types can interact. When there\u2019s no safe conversion, the compiler rejects the operation.\n\nHow to fix it:\n Change the variable types to match, adjust the expression, or use an explicit cast only if it\u2019s logically safe. This error occurred inside a col.",
+    "suggestion": "Make the operand types compatible (or add a safe explicit cast).",
+    "confidence": 0.38436919090017546
+  },
+  {
+    "message": "expected ';' after expression",
+    "category": "syntax_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n The compiler expected a ;, but it wasn\u2019t found where it was needed.\n\nWhy it happened:\n In C/C++, most statements must end with a semicolon. If it\u2019s missing, the parser gets out of sync.\n\nHow to fix it:\n Add the missing semicolon at the end of the statement. This error occurred inside a col.",
+    "suggestion": "Fix the syntax error near the reported location (check for missing ';').",
+    "confidence": 1.0
+  },
+  {
+    "message": "using directive refers to implicitly-defined namespace 'std'",
+    "category": "function_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n No available overload of the function matches the arguments you provided.\n\nWhy it happened:\n Function overload resolution depends on the number and types of arguments. If none match, the compiler can\u2019t choose a function to call.\n\nHow to fix it:\n Check the function signature, pass the correct number/type of arguments, or add/adjust an overload that matches your call. This error occurred inside a col.",
+    "suggestion": "Fix the call to match an existing signature (or implement an overload).",
+    "confidence": 0.3705739090348165
+  },
+  {
+    "message": "use of undeclared identifier 'cout'",
+    "category": "name_resolution",
+    "ast_node": null,
+    "explanation": "What happened:\n You used 'cout', but the compiler doesn\u2019t know what it refers to in this scope.\n\nWhy it happened:\n This happens when a variable/function isn\u2019t declared yet, is declared in a different scope, or a header/namespace is missing.\n\nHow to fix it:\n Declare it before use, include the correct header, and verify spelling and namespace qualifiers.",
+    "suggestion": "Declare the identifier before use (or include the right header) and recompile.",
+    "confidence": 0.48733449341005236
+  },
+  {
+    "message": "use of undeclared identifier 'endl'",
+    "category": "name_resolution",
+    "ast_node": null,
+    "explanation": "What happened:\n You used 'endl', but the compiler doesn\u2019t know what it refers to in this scope.\n\nWhy it happened:\n This happens when a variable/function isn\u2019t declared yet, is declared in a different scope, or a header/namespace is missing.\n\nHow to fix it:\n Declare it before use, include the correct header, and verify spelling and namespace qualifiers.",
+    "suggestion": "Declare the identifier before use (or include the right header) and recompile.",
+    "confidence": 0.48733449341005236
+  },
+  {
+    "message": "non-void function does not return a value [-Wreturn-type]",
+    "category": "Warning",
+    "ast_node": "line",
+    "explanation": "The compiler emitted a warning. This error occurred inside a line.",
+    "suggestion": "Review the warning and adjust code to avoid potential bugs (or explicitly silence if intended).",
+    "confidence": 0.4123270453120127
+  },
+  {
+    "message": "redefinition of 'foo'",
+    "category": "syntax_error",
+    "ast_node": "line",
+    "explanation": "What happened:\n The compiler encountered a syntax error that it couldn't specifically identify.\n\nWhy it happened:\n This usually happens due to missing tokens, misplaced brackets, or invalid expressions.\n\nHow to fix it:\n Carefully check the reported line and the line immediately above it for typos. This error occurred inside a line.",
+    "suggestion": "Fix the syntax error near the reported location (check for missing 'tokens').",
+    "confidence": 0.4406488976775616
+  },
+  {
+    "message": "indirection requires pointer operand ('int' invalid)",
+    "category": "function_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n No available overload of the function matches the arguments you provided.\n\nWhy it happened:\n Function overload resolution depends on the number and types of arguments. If none match, the compiler can\u2019t choose a function to call.\n\nHow to fix it:\n Check the function signature, pass the correct number/type of arguments, or add/adjust an overload that matches your call. This error occurred inside a col.",
+    "suggestion": "Fix the call to match an existing signature (or implement an overload).",
+    "confidence": 0.29867485353033035
+  },
+  {
+    "message": "redefinition of 'x'",
+    "category": "function_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n No available overload of the function matches the arguments you provided.\n\nWhy it happened:\n Function overload resolution depends on the number and types of arguments. If none match, the compiler can\u2019t choose a function to call.\n\nHow to fix it:\n Check the function signature, pass the correct number/type of arguments, or add/adjust an overload that matches your call. This error occurred inside a col.",
+    "suggestion": "Fix the call to match an existing signature (or implement an overload).",
+    "confidence": 0.2911167123201093
+  },
+  {
+    "message": "invalid application of 'sizeof' to a function type",
+    "category": "function_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n No available overload of the function matches the arguments you provided.\n\nWhy it happened:\n Function overload resolution depends on the number and types of arguments. If none match, the compiler can\u2019t choose a function to call.\n\nHow to fix it:\n Check the function signature, pass the correct number/type of arguments, or add/adjust an overload that matches your call. This error occurred inside a col.",
+    "suggestion": "Fix the call to match an existing signature (or implement an overload).",
+    "confidence": 0.3911700851314078
+  },
+  {
+    "message": "cannot initialize a variable of type 'char *' with an lvalue of type 'int'",
+    "category": "type_error",
+    "ast_node": "col",
+    "explanation": "What happened:\n Two parts of an expression have incompatible types.\n\nWhy it happened:\n C++ has strict rules about how different types can interact. When there\u2019s no safe conversion, the compiler rejects the operation.\n\nHow to fix it:\n Change the variable types to match, adjust the expression, or use an explicit cast only if it\u2019s logically safe. This error occurred inside a col.",
+    "suggestion": "Make the operand types compatible (or add a safe explicit cast).",
+    "confidence": 0.3859145623568229
+  },
+  {
+    "message": "'main' must return 'int'",
+    "category": "name_resolution",
+    "ast_node": "line",
+    "explanation": "What happened:\n You used the identifier, but the compiler doesn\u2019t know what it refers to in this scope.\n\nWhy it happened:\n This happens when a variable/function isn\u2019t declared yet, is declared in a different scope, or a header/namespace is missing.\n\nHow to fix it:\n Declare it before use, include the correct header, and verify spelling and namespace qualifiers. This error occurred inside a line.",
+    "suggestion": "Declare the identifier before use (or include the right header) and recompile.",
+    "confidence": 0.3164808667589742
+  },
+  {
+    "message": "expected ';' after expression",
+    "category": "Syntax",
+    "ast_node": "col",
+    "explanation": "A statement is missing a semicolon at the end.",
+    "suggestion": "Add a semicolon to terminate the statement.",
+    "confidence": 0.95
+  },
+  {
+    "message": "cast to 'int *' from smaller integer type 'int' [-Wint-to-pointer-cast]",
+    "category": "Type",
+    "ast_node": "col",
+    "explanation": "Invalid type conversion requested. The standard casts don't support moving between these types natively.",
+    "suggestion": "Make sure the cast is conceptually valid. You may need a specific constructor.",
+    "confidence": 0.95
+  },
+  {
+    "message": "use of undeclared identifier 'y'",
+    "category": "Name Resolution",
+    "ast_node": "col",
+    "explanation": "The compiler doesn't know about 'y'. It needs to be declared before it is used.",
+    "suggestion": "Provide a variable declaration for 'y' or include the required header.",
+    "confidence": 0.95
+  }
+]
