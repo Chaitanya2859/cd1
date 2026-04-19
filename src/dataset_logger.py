@@ -1,14 +1,20 @@
 import os
 import json
 from typing import Dict, Any
+from error_normalizer import normalize_error
 
 DATA_DIR=os.path.join(os.path.dirname(os.path.dirname(__file__)),"data")
 DATA_FILE=os.path.join(DATA_DIR,"training_data.json")
 
 def log_example(error)->None:
     os.makedirs(DATA_DIR,exist_ok=True)
+    
+    # Normalize: use abstract semantic form for dataset storage
+    dataset_message, _ = normalize_error(error.message)
+    
     entry={
-        "message":error.message,
+        "message": dataset_message,
+        "raw_message": error.message,
         "category":error.category,
         "ast_node":getattr(error, "ast_node", ""),
         "explanation":error.explanation,

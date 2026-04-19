@@ -1,5 +1,5 @@
 class CompilerError:
-    def __init__(self,file,line,column,error_type,message,raw):
+    def __init__(self,file,line,column,error_type,message,raw,security_risk=None,risk_reason=None,security_findings=None):
         self.file=file
         self.line=line
         self.column=column
@@ -12,8 +12,20 @@ class CompilerError:
         self.context=None
         self.category=None
         self.confidence=0.0
+        self.security_risk=security_risk
+        self.risk_reason=risk_reason
+        self.security_findings=security_findings or []
 
     def to_dict(self):
+        findings=[]
+        for finding in getattr(self, "security_findings", []) or []:
+            if hasattr(finding, "to_dict"):
+                findings.append(finding.to_dict())
+            elif isinstance(finding, dict):
+                findings.append(finding)
+            else:
+                findings.append(str(finding))
+
         return {
             "file":self.file,
             "line":self.line,
@@ -25,6 +37,9 @@ class CompilerError:
             "context":self.context,
             "category":self.category,
             "confidence":self.confidence,
+            "security_risk":self.security_risk,
+            "risk_reason":self.risk_reason,
+            "security_findings":findings,
         }
     
     def __str__(self):

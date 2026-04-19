@@ -8,6 +8,7 @@ import textwrap
 from compiler_runner import run_cpp_compiler
 from error_parser import parse_errors
 from error_explainer import enrich_error
+from security_analyzer import analyze, format_security_report
 from dataset_logger import log_example
 from ast_extractor import extract_ast, extract_node_near_line
 
@@ -83,10 +84,18 @@ def main():
     args=parse_arguments()
     output=run_cpp_compiler(args.source_file)
     if not output:
+        security_findings = analyze(args.source_file, [])
         if args.json:
-            print(json.dumps({"status": "success"}, indent=2))
+            print(json.dumps({
+                "status": "success",
+                "file": args.source_file,
+                "security_findings": [finding.to_dict() for finding in security_findings],
+                "security_report": format_security_report(security_findings),
+            }, indent=2))
         else:
             print("Compilation successful")
+            print()
+            print(format_security_report(security_findings), end="")
         return 0
 
     errors=parse_errors(output)
@@ -102,6 +111,16 @@ def main():
         enrich_error(e)
         log_example(e)
 
+    security_findings = analyze(args.source_file, errors)
+    for e in errors:
+        if not getattr(e, "security_findings", None):
+            e.security_findings = [
+                finding for finding in security_findings
+                if finding.source == "compiler_diagnostic"
+                and finding.file == (e.file or "")
+                and finding.line == e.line
+            ]
+
     #JSON mode
 
     if args.json:
@@ -110,7 +129,9 @@ def main():
             "file": args.source_file,
             "error_count": sum(1 for e in errors if e.error_type=="error"),
             "warning_count": sum(1 for e in errors if e.error_type=="warning"),
-            "errors": [e.to_dict() for e in errors]
+            "errors": [e.to_dict() for e in errors],
+            "security_findings": [finding.to_dict() for finding in security_findings],
+            "security_report": format_security_report(security_findings),
         }
 
         print(json.dumps(result, indent=2))
@@ -132,6 +153,8 @@ def main():
         print_error(e,verbose=args.verbose)
 
     print(f"{error_count} error(s), {warning_count} warning(s)")
+    print()
+    print(format_security_report(security_findings), end="")
     return 1 if error_count > 0 else 0
 
 if __name__ == "__main__":

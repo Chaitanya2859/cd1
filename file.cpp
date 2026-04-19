@@ -1,9 +1,9 @@
 // Enter your C++ code here
 #include <iostream>
-using namespace std;
+#include <algorithm>
 
 int main() {
-    const int x=5;
-    x=10;
-    return 0;
+     g = 1;
+     
+     cout<<g<<endl;
 }

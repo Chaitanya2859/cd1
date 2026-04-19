@@ -1,56 +1,82 @@
 import re
 from typing import Dict, Any, Optional
-from error_classifier import get_default_classifier, predict_error_category
+from error_classifier import get_default_classifier
+from error_normalizer import normalize_error
+from common_errors import COMMON_ERRORS
+from security_analyzer import analyze
 
-CATEGORY_TEMPLATES = {
-    "Syntax":{
-        "explanation":"The compiler is reporting a syntax error.",
-        "suggestion":"Check for missing semicolons, mismatched parentheses/braces, and misplaced tokens near the reported location.",
+EXPLANATIONS = {
+    "syntax_error": {
+        "what": "The compiler found an unexpected token or character in your code.",
+        "why": "C++ has strict syntax rules. A missing semicolon, bracket, or parenthesis causes the parser to lose track of where one statement ends and another begins.",
+        "how": "Check the line reported and the line just before it. Look for a missing ';', unmatched '(' or '{', or a stray character.",
+        "suggestion": "Fix the syntax error near the reported location."
     },
-    "Name Resolution":{
-        "explanation":"The compiler cannot resolve an identifier (name) in the current scope.",
-        "suggestion":"Check spelling, ensure the symbol is declared before use, and include the right headers/namespaces.",
+    "name_resolution": {
+        "what": "The compiler encountered an identifier that has not been declared.",
+        "why": "In C++, every variable, function, or class must be declared before it is used. It may also be in a different scope or namespace.",
+        "how": "Declare the variable before using it, check your spelling, or add the missing #include or 'using namespace std;'.",
+        "suggestion": "Declare the identifier before use or add the missing #include."
     },
-    "Type":{
-        "explanation":"The compiler detected a type-related issue.",
-        "suggestion":"Check the types involved, implicit/explicit conversions, and that function overloads match the argument types.",
+    "type_error": {
+        "what": "A value of one type is being used where an incompatible type is expected.",
+        "why": "C++ is strongly typed. Operations between incompatible types are not allowed without an explicit cast.",
+        "how": "Check the types of the values involved. Add an explicit cast, change the variable type, or use the correct operator.",
+        "suggestion": "Ensure both operands are compatible types or add an explicit cast."
     },
-    "Linker":{
-        "explanation":"The linker could not find a required symbol definition.",
-        "suggestion":"Ensure the function/variable is defined, and that you are linking the correct object files/libraries.",
+    "missing_include": {
+        "what": "A required header file could not be found.",
+        "why": "The function or class you are using is defined in a header file that has not been included in your source file.",
+        "how": "Add the appropriate #include at the top of your file. For standard library features use angle brackets e.g. #include <iostream>.",
+        "suggestion": "Add the missing #include directive at the top of your file."
     },
-    "Control Flow":{
-        "explanation":"The compiler detected an issue with control flow usage.",
-        "suggestion":"Verify statements like break/continue/return are used in valid contexts.",
+    "linker_error": {
+        "what": "The linker could not find the definition of a function or variable.",
+        "why": "The compiler found a declaration but no matching definition was compiled into the project.",
+        "how": "Make sure the .cpp file containing the definition is being compiled. Check for typos in the function name or missing library flags.",
+        "suggestion": "Ensure the function is defined and all source files are being compiled."
     },
-    "Warning":{
-        "explanation":"The compiler emitted a warning.",
-        "suggestion":"Review the warning and adjust code to avoid potential bugs (or explicitly silence if intended).",
+    "redefinition": {
+        "what": "The same identifier is defined more than once.",
+        "why": "C++ does not allow two definitions of the same variable or function in the same scope.",
+        "how": "Remove the duplicate definition. If it is coming from a header file, add #pragma once or include guards.",
+        "suggestion": "Remove the duplicate definition or add include guards to your header."
     },
-    "Access Control":{
-        "explanation":"The compiler detected an access control violation.",
-        "suggestion":"Check member visibility (private/protected/public) and access through appropriate methods.",
+    "access_error": {
+        "what": "A private or protected member is being accessed from outside its class.",
+        "why": "C++ enforces access control. Private members can only be accessed from within the class itself.",
+        "how": "Use a public getter/setter method, declare the accessing code as a friend, or change the member's access level.",
+        "suggestion": "Use a public method to access the member or change its access level."
     },
-    "Const Correctness":{
-        "explanation":"The compiler detected a const-correctness issue.",
-        "suggestion":"Ensure const objects only call const methods, and avoid modifying const-qualified data.",
+    "return_type_error": {
+        "what": "A function is missing a return statement or returns the wrong type.",
+        "why": "In C++, non-void functions must return a value that matches their declared return type. main() must always return int.",
+        "how": "Add a return statement with the correct type. For main(), use 'return 0;' at the end.",
+        "suggestion": "Add a return statement matching the function's declared return type."
     },
-    "Template":{
-        "explanation":"The compiler detected a template usage issue.",
-        "suggestion":"Check template arguments and ensure templates are instantiated with the correct parameters.",
-    },
-    "Undefined Behavior":{
-        "explanation":"The compiler warned about a potential undefined behavior issue.",
-        "suggestion":"Initialize variables, avoid division by zero, and ensure operations are safe for all inputs.",
-    },
-    "AST-Based Analysis":{
-        "explanation":"The compiler found a problem near this line, but it doesn’t match a known pattern.",
-        "suggestion":"Inspect the highlighted line and surrounding code. Verify syntax, types, and required declarations.",
-    },
+    "other": {
+        "what": "The compiler reported an issue that does not fit a standard category.",
+        "why": "This may be a warning treated as an error, a platform-specific issue, or an uncommon language rule violation.",
+        "how": "Read the full compiler message carefully and check the indicated line for the root cause.",
+        "suggestion": "Read the compiler message carefully and correct the highlighted code."
+    }
 }
 
+def lookup_common_error(message: str) -> Optional[Dict[str, Any]]:
+    """
+    Check if the error message matches any of the pre-defined common errors.
+    Uses substring matching to handle variations while maintaining specificity.
+    """
+    lowered_msg = message.lower()
+    for common in COMMON_ERRORS:
+        # Check if the common error message (or a major part of it) is in the actual message
+        # We strip surrounding quotes if they exist in the template to match more flexibly
+        template_msg = common["message"].lower().strip("'\"")
+        if template_msg in lowered_msg:
+            return common
+    return None
 
-def format_error(what:str, why:str, how:str) -> str:
+def format_error(what: str, why: str, how: str) -> str:
     return (
         f"What happened:\n"
         f" {what}\n\n"
@@ -60,325 +86,53 @@ def format_error(what:str, why:str, how:str) -> str:
         f" {how}"
     )
 
-
-def extract_tokens(message:str)->Dict[str,Optional[str]]:
-    tokens:Dict[str, Optional[str]]={
-        "identifier":None,
-        "function":None,
-        "expected_token":None,
-        "from_type":None,
-        "to_type":None,
-        "arg_expected":None,
-        "arg_provided":None,
+def explain_category(category: str, message: str) -> Optional[Dict[str, str]]:
+    if category not in EXPLANATIONS:
+        return None
+    
+    template = EXPLANATIONS[category]
+    
+    # Use normalizer to get a specific readable sentence for the 'what' part
+    _, specific_what = normalize_error(message)
+    
+    explanation = format_error(
+        what=specific_what,
+        why=template["why"],
+        how=template["how"]
+    )
+    
+    return {
+        "explanation": explanation,
+        "suggestion": template["suggestion"]
     }
 
-    if not message:
-        return tokens
-
-    m = re.search(r"expected\s+(.+?)(?:\s+before|\s+after|\s+at|$)", message, re.IGNORECASE)
-    if m:
-        tokens["expected_token"] = m.group(1).strip().strip("`\"'")
-
-    m = re.search(r"'([^']+)'\s+was not declared in this scope", message, re.IGNORECASE)
-    if m:
-        tokens["identifier"] = m.group(1)
-    m = re.search(r"use of undeclared identifier\s+'([^']+)'", message, re.IGNORECASE)
-    if m:
-        tokens["identifier"] = m.group(1)
-
-    m = re.search(r"no matching function for call to\s+'([^']+)'", message, re.IGNORECASE)
-    if m:
-        tokens["function"] = m.group(1)
-
-    m = re.search(r"cannot convert\s+'([^']+)'\s+to\s+'([^']+)'", message, re.IGNORECASE)
-    if m:
-        tokens["from_type"] = m.group(1)
-        tokens["to_type"] = m.group(2)
-
-    m = re.search(r"conversion from\s+'([^']+)'\s+to\s+'([^']+)'", message, re.IGNORECASE)
-    if m and not tokens["from_type"] and not tokens["to_type"]:
-        tokens["from_type"] = m.group(1)
-        tokens["to_type"] = m.group(2)
-
-    m = re.search(
-        r"requires\s+(\d+)\s+argument[s]?,\s+but\s+(\d+)\s+were provided",
-        message,
-        re.IGNORECASE,
-    )
-    if m:
-        tokens["arg_expected"] = m.group(1)
-        tokens["arg_provided"] = m.group(2)
-
-    return tokens
-
-
-def explain_category(category:str, message:str) -> Optional[Dict[str, str]]:
-    t = extract_tokens(message)
-
-    if category=="syntax_error":
-        expected=t.get("expected_token")
-        if expected:
-            what=f"The compiler expected a {expected}, but it wasn’t found where it was needed."
-            if "semicolon" in message.lower() or expected == ";":
-                why="In C/C++, most statements must end with a semicolon. If it’s missing, the parser gets out of sync."
-                how="Add the missing semicolon at the end of the statement."
-            elif "identifier" in message.lower():
-                why="The compiler expected a name (like a variable or function name) but found something else or nothing."
-                how="Provide a valid identifier at the reported location."
-            else:
-                why="The code violates C++ grammar rules at this location."
-                how=f"Check the code near the error and ensure it follows the expected pattern for a {expected}."
-        else:
-            what="The compiler encountered a syntax error that it couldn't specifically identify."
-            why="This usually happens due to missing tokens, misplaced brackets, or invalid expressions."
-            how="Carefully check the reported line and the line immediately above it for typos."
-            
-        return {
-            "explanation":format_error(what, why, how),
-            "suggestion":f"Fix the syntax error near the reported location (check for missing '{expected or 'tokens'}').",
-        }
-    
-    if "break" in message and "not in loop" in message:
-        what = "You used a 'break' statement outside of a loop or switch block."
-        why = "In C++, 'break' can only appear inside loops (for, while, do-while) or switch statements."
-        how = "Move the 'break' inside a valid loop/switch, or remove it if unnecessary."
-
-        return {
-            "explanation":format_error(what, why, how),
-            "suggestion":"Ensure 'break' is inside a loop or switch block.",
-        }
-
-    if category == "warning":
-        if "unused" in message.lower():
-            what = "An expression or variable was evaluated/declared, but its result wasn’t used for anything."
-            why = "This often happens when you write something like `a + b;` intending to assign or return the value, but you never store it."
-            how = "Assign the result (e.g., `x = a + b;`), return it (`return a + b;`), or remove it if it’s not needed."
-            return {
-                "explanation":format_error(what, why, how),
-                "suggestion":"Use the result (assign/return) or remove it.",
-            }
-
-    if category == "name_resolution":
-        name = t.get("identifier")
-        quoted = f"'{name}'" if name else "the identifier"
-        what = f"You used {quoted}, but the compiler doesn’t know what it refers to in this scope."
-        why = "This happens when a variable/function isn’t declared yet, is declared in a different scope, or a header/namespace is missing."
-        how = "Declare it before use, include the correct header, and verify spelling and namespace qualifiers."
-        return {
-            "explanation":format_error(what, why, how),
-            "suggestion":"Declare the identifier before use (or include the right header) and recompile.",
-        }
-
-    if category == "type_error":
-        ft = t.get("from_type")
-        tt = t.get("to_type")
-        if ft and tt:
-            what = f"A value of type '{ft}' is being used where a '{tt}' is required."
-        elif "operands" in message.lower():
-            what = "You are using an operator with incompatible types."
-        else:
-            what = "Two parts of an expression have incompatible types."
-        why = "C++ has strict rules about how different types can interact. When there’s no safe conversion, the compiler rejects the operation."
-        how = "Change the variable types to match, adjust the expression, or use an explicit cast only if it’s logically safe."
-        return {
-            "explanation":format_error(what, why, how),
-            "suggestion":"Make the operand types compatible (or add a safe explicit cast).",
-        }
-
-    if category=="function_error":
-        fn=t.get("function")
-        exp=t.get("arg_expected")
-        got=t.get("arg_provided")
-        target=f"'{fn}'" if fn else "the function"
-        if exp and got:
-            what=f"You called {target} with {got} argument(s), but the available overload expects {exp}."
-        else:
-            what=f"No available overload of {target} matches the arguments you provided."
-        why="Function overload resolution depends on the number and types of arguments. If none match, the compiler can’t choose a function to call."
-        how="Check the function signature, pass the correct number/type of arguments, or add/adjust an overload that matches your call."
-        return {
-            "explanation":format_error(what,why,how),
-            "suggestion":"Fix the call to match an existing signature (or implement an overload).",
-        }
-
-    return None
-
-SECURITY_RULES=[
+SECURITY_RULES = [
     {
-        "pattern":r"may be used uninitialized",
-        "risk":"High",
-        "reason":"Uninitialized variables may cause undefined behavior or memory corruption."
+        "pattern": r"may be used uninitialized",
+        "risk": "High",
+        "reason": "Uninitialized variables may cause undefined behavior or memory corruption."
     },
     {
-        "pattern":r"division by zero",
-        "risk":"High",
-        "reason":"Division by zero can crash the program or cause undefined behavior."
+        "pattern": r"division by zero",
+        "risk": "High",
+        "reason": "Division by zero can crash the program or cause undefined behavior."
     },
     {
-        "pattern":r"invalid conversion",
-        "risk":"Medium",
-        "reason":"Incorrect type conversion may lead to memory or logic errors."
+        "pattern": r"invalid conversion",
+        "risk": "Medium",
+        "reason": "Incorrect type conversion may lead to memory or logic errors."
     },
     {
-        "pattern":r"assignment of read-only location",
-        "risk":"Medium",
-        "reason":"Modifying const-qualified data may indicate unsafe design."
+        "pattern": r"assignment of read-only location",
+        "risk": "Medium",
+        "reason": "Modifying const-qualified data may indicate unsafe design."
     },
     {
-        "pattern":r"undefined reference",
-        "risk":"Low",
-        "reason":"Linker errors typically do not introduce runtime vulnerabilities."
+        "pattern": r"undefined reference",
+        "risk": "Low",
+        "reason": "Linker errors typically do not introduce runtime vulnerabilities."
     }
 ]
-
-def explain_error(error)->Dict[str, Any]:
-    if not error or not error.message:
-        return {
-            "explanation":"No error message provided.",
-            "suggestion":"Check the compilation command and input files.",
-            "category":"Unknown",
-            "confidence":0.0
-        }
-
-    classifier = get_default_classifier()
-    ast_node = getattr(error, "ast_node", "")
-    category, confidence = classifier.predict(error.message, ast_node=ast_node)
-
-    # Secondary regex fallbacks for definitive patterns if ML confidence is low
-    if confidence < 0.45:
-        if re.search(r"expression result unused", error.message, re.IGNORECASE):
-            category = "warning"
-            confidence = 0.95
-        elif re.search(r"expected\s+';", error.message, re.IGNORECASE) or re.search(r"expected\s*';'", error.message, re.IGNORECASE):
-            category = "syntax_error"
-            confidence = 0.95
-        elif re.search(r"was not declared in this scope", error.message, re.IGNORECASE) or re.search(r"use of undeclared identifier", error.message, re.IGNORECASE):
-            category = "name_resolution"
-            confidence = 0.95
-        elif re.search(r"cannot convert", error.message, re.IGNORECASE) or re.search(r"invalid conversion", error.message, re.IGNORECASE) or re.search(r"narrowing conversion", error.message, re.IGNORECASE):
-            category = "type_error"
-            confidence = 0.9
-        elif re.search(r"no matching function for call to", error.message, re.IGNORECASE) or re.search(r"candidate function not viable", error.message, re.IGNORECASE) or re.search(r"requires\s+\d+\s+argument", error.message, re.IGNORECASE):
-            category = "function_error"
-            confidence = 0.9
-        elif re.search(r"expected primary-expression", error.message, re.IGNORECASE) or re.search(r"expected expression", error.message, re.IGNORECASE) or re.search(r"expected ';'", error.message, re.IGNORECASE) or re.search(r"expected identifier", error.message, re.IGNORECASE) or re.search(r"invalid use of", error.message, re.IGNORECASE):
-            category = "syntax_error"
-            confidence = 0.9
-        elif re.search(r"invalid operands", error.message, re.IGNORECASE):
-            category = "type_error"
-            confidence = 0.9
-        elif re.search(r"expected '\)'", error.message, re.IGNORECASE):
-            category = "syntax_error"
-            confidence = 0.9
-
-    # Map fine-grained ML categories to high-level template categories
-    category_map = {
-        "syntax_error": "Syntax",
-        "name_resolution": "Name Resolution",
-        "type_error": "Type",
-        "function_error": "Type",
-        "warning": "Warning",
-        "linker_error": "Linker",
-    }
-    
-    template_category = category_map.get(category, category)
-    min_confidence = 0.35
-
-    fine = explain_category(category, error.message)
-    if fine :
-        explanation = fine["explanation"]
-        suggestion = fine["suggestion"]
-        node = getattr(error, "ast_node", None)
-        if node:
-            explanation += f" This error occurred inside a {node}."
-            confidence = min(1.0, confidence + 0.05)
-        return {
-            "explanation":explanation,
-            "suggestion":suggestion,
-            "category":category,
-            "confidence":confidence,
-        }
-
-    if template_category and confidence>=min_confidence:
-        template = CATEGORY_TEMPLATES.get(template_category)
-        if template:
-            explanation = template.get("explanation")
-            suggestion = template.get("suggestion")
-        else:
-            explanation = "The compiler reported an error in this category."
-            suggestion = "Inspect the highlighted line and surrounding code to resolve the issue."
-
-        node = getattr(error, "ast_node", None)
-        if node:
-            explanation += f" This error occurred inside a {node}."
-            confidence = min(1.0, confidence + 0.05)
-
-        return {
-            "explanation":explanation,
-            "suggestion":suggestion,
-            "category":template_category,
-            "confidence":confidence,
-        }
-
-    node=getattr(error, "ast_node", None)
-
-    if node=="DeclStmt":
-        explanation=(
-        format_error(
-            "A declaration statement (like declaring a variable) contains something the compiler can’t parse.",
-            "Declarations have a strict grammar:a type, a name, and sometimes an initializer. Missing tokens (like ';') or invalid types commonly trigger this.",
-            "Re-check the declaration for missing semicolons, typos in the type name, and correct initializer syntax."
-        )
-        )
-    elif node == "BinaryOperator":
-        explanation=(
-        format_error(
-            "An operator (like +, -, =, ==) is being applied in a way the compiler can’t type-check.",
-            "Operators require operands of compatible types and sometimes require user-defined overloads.",
-            "Verify both operand types and the operator. If needed, convert types or implement the appropriate overload."
-        )
-        )
-    elif node == "CallExpr":
-        explanation=(
-        format_error(
-            "A function call could not be matched to a valid function signature.",
-            "This usually means the function name is wrong, the argument count is wrong, or argument types don’t match any overload.",
-            "Check the function declaration and update the call to match the expected signature."
-        )
-        )
-    elif node == "IfStmt":
-        explanation=(
-        format_error(
-            "There is an error inside an if-statement condition or body.",
-            "If conditions must be valid expressions, and the body must be syntactically correct. A missing ')' or ';' earlier can also surface here.",
-            "Ensure the condition is a valid expression and braces/parentheses are balanced."
-        )
-    )
-    elif node == "ReturnStmt":
-        explanation=(
-        format_error(
-            "A return statement doesn’t match what the function promises to return.",
-            "If a function has a non-void return type, every path must return a compatible value.",
-            "Return a value of the correct type (or adjust the function’s return type)."
-        )
-        )
-    else:
-        explanation=(
-        format_error(
-            "The compiler rejected something in this statement.",
-            "This usually happens because the code violates C++ syntax rules or uses a name/type that isn’t valid in this context.",
-            "Read the compiler message carefully, identify the referenced token/name, and correct the statement accordingly."
-        )
-    )
-
-    return {
-        "explanation":explanation,
-        "suggestion":(
-            "Use the compiler message as a clue:fix the referenced token/name/type, then recompile to confirm the next issue (if any)."
-        ),
-        "category":"AST-Based Analysis",
-        "confidence":0.5 if node else 0.3
-    }
 
 def analyze_security_risk(error):
     if not error or not error.message:
@@ -389,21 +143,94 @@ def analyze_security_risk(error):
             return rule["risk"], rule["reason"]
     return "Low", "No immediate security risk detected."
 
+def explain_error(error) -> Dict[str, Any]:
+    if not error or not error.message:
+        return {
+            "explanation": "No error message provided.",
+            "suggestion": "Check the compilation command and input files.",
+            "category": "Unknown",
+            "confidence": 0.0
+        }
 
-def enrich_error(error:'CompilerError') -> None:
+    # 1. First, check the Common Errors Glossary
+    common = lookup_common_error(error.message)
+    if common:
+        return {
+            "explanation": format_error(
+                what=common["explanation"], # The glossary stores 'explanation' as the 'what' part
+                why=EXPLANATIONS.get(common["category"], EXPLANATIONS["other"])["why"],
+                how=EXPLANATIONS.get(common["category"], EXPLANATIONS["other"])["how"]
+            ),
+            "suggestion": common["suggestion"],
+            "category": common["category"],
+            "confidence": common["confidence"]
+        }
+
+    # 2. Fallback to ML-based classification and templated explanation
+    classifier = get_default_classifier()
+    ast_node = getattr(error, "ast_node", "")
+    category, confidence = classifier.predict(error.message, ast_node=ast_node)
+
+    # Regex fallbacks if ML confidence is low
+    if confidence < 0.45:
+        if re.search(r"expected\s+';", error.message, re.IGNORECASE):
+            category = "syntax_error"
+            confidence = 0.95
+        elif re.search(r"was not declared in this scope", error.message, re.IGNORECASE):
+            category = "name_resolution"
+            confidence = 0.95
+        elif re.search(r"cannot convert", error.message, re.IGNORECASE):
+            category = "type_error"
+            confidence = 0.9
+
+    template_category = category 
+    
+    fine = explain_category(template_category, error.message)
+    
+    if not fine:
+        template_category = "other"
+        fine = explain_category(template_category, error.message)
+
+    explanation = fine["explanation"]
+    suggestion = fine["suggestion"]
+    
+    node = getattr(error, "ast_node", None)
+    if node:
+        explanation += f"\n\nThis error occurred inside a {node} statement."
+        confidence = min(1.0, confidence + 0.05)
+    
+    return {
+        "explanation": explanation,
+        "suggestion": suggestion,
+        "category": template_category,
+        "confidence": confidence,
+    }
+
+def enrich_error(error: 'CompilerError') -> None:
     if not error:
         return
-    result=explain_error(error)
+    result = explain_error(error)
 
-    error.explanation=result["explanation"]
-    error.suggestion=result["suggestion"]
-    error.category=result["category"]
-    error.confidence=result["confidence"]
+    error.explanation = result["explanation"]
+    error.suggestion = result["suggestion"]
+    error.category = result["category"]
+    error.confidence = result["confidence"]
 
-    risk,reason=analyze_security_risk(error)
-    error.security_risk=risk
-    error.risk_reason=reason
+    risk, reason = analyze_security_risk(error)
+    error.security_risk = risk
+    error.risk_reason = reason
 
     if error.file and error.line and not error.context:
         from error_parser import get_source_context
-        error.context=get_source_context(error.file, error.line)
+        error.context = get_source_context(error.file, error.line)
+
+    error.security_findings = []
+    if error.file:
+        try:
+            findings = analyze(error.file, [error])
+            error.security_findings = [
+                finding for finding in findings
+                if finding.source == "compiler_diagnostic" or finding.line == error.line
+            ]
+        except Exception:
+            error.security_findings = []
