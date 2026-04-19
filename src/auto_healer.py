@@ -56,6 +56,7 @@ _CPP_KEYWORDS = [
     "struct", "public", "private", "protected", "new", "delete", "true",
     "false", "const", "static", "namespace", "include", "template", "virtual",
 ]
+_VALID_KEYWORDS = set(_CPP_KEYWORDS)
 
 
 def _build_keyword_variant_map() -> dict[str, str]:
@@ -118,13 +119,24 @@ def _extract_symbol(message: str) -> Optional[str]:
     return m.group(1).split("::")[-1] if m else None
 
 
-def _fix_keyword_typo(line: str) -> Optional[str]:
+def _fix_keyword_typo(line: str, target_token: Optional[str] = None) -> Optional[str]:
     """
     Replace a misspelled C++ keyword if the token matches one of the keyword
     permutation variants or is close by edit distance.
     """
+    if not target_token:
+        return None
+    if len(target_token) < 3:
+        return None
+
     for match in re.finditer(r"\b[A-Za-z_]\w*\b", line):
         token = match.group(0)
+        if token != target_token:
+            continue
+        # Real keywords are never candidates for healing.
+        if token in _VALID_KEYWORDS:
+            continue
+
         canonical = _KEYWORD_VARIANTS.get(token)
         if canonical and canonical != token:
             return line[:match.start()] + canonical + line[match.end():]
@@ -150,6 +162,22 @@ def _fix_keyword_typo(line: str) -> Optional[str]:
     return None
 
 
+def _append_missing_semicolon(line: str) -> Optional[str]:
+    stripped = line.rstrip("\n\r")
+    content = stripped.strip()
+    if not content:
+        return None
+    if re.search(r"[;{},:]\s*$", stripped):
+        return None
+    if content.startswith(("#", "//")):
+        return None
+    if re.match(r"^(if|else|for|while|switch|case|do|class|struct|namespace|template|public|private|protected)\b", content):
+        return None
+    if re.search(r"\)\s*$", stripped) and re.match(r"^(if|for|while|switch)\b", content):
+        return None
+    return stripped + ";\n"
+
+
 def _has_include(source: str, header: str) -> bool:
     return bool(re.search(rf'#include\s*[<"]{re.escape(header)}[>"]', source))
 
@@ -168,7 +196,102 @@ def _insert_include(source: str, header: str) -> str:
 
 
 _RAW_STRING_START = re.compile(r'(?:u8|u|U|L)?R"([^\s()\\]{0,16})\(')
-_UNINIT_MESSAGE_RE = re.compile(r"used uninitialized|may be used uninitialized", re.IGNORECASE)
+_UNINIT_MESSAGE_RE = re.compile(
+    r"used uninitialized"
+    r"|may be used uninitialized"
+    r"|is uninitialized when used"
+    r"|uninitialized when used here"
+    r"|wuninitialized"
+    r"|uninitialized variable",
+    re.IGNORECASE,
+)
+_UNDECLARED_IDENTIFIER_PHRASES = (
+    "was not declared in this scope",
+    "use of undeclared identifier",
+    "undeclared identifier",
+    "identifier not found",
+    "is undefined",
+)
+_INTEGER_OVERFLOW_PHRASES = (
+    "integer overflow",
+    "overflow in expression",
+    "result is undefined",
+)
+_DIVISION_BY_ZERO_PHRASES = (
+    "division by zero",
+    "divide by zero",
+)
+_STREAM_OPERATOR_PHRASES = (
+    "no match for 'operator<<'",
+    "no match for 'operator>>'",
+    "operand types are 'std::istream'",
+    "operand types are 'std::ostream'",
+    "invalid operands to binary expression",
+)
+_UNUSED_VARIABLE_PHRASES = (
+    "set but not used",
+    "unused variable",
+    "unused but set variable",
+    "declared but never used",
+)
+
+
+def _is_undeclared_identifier_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(phrase in lowered for phrase in _UNDECLARED_IDENTIFIER_PHRASES)
+
+
+def _is_integer_overflow_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(phrase in lowered for phrase in _INTEGER_OVERFLOW_PHRASES)
+
+
+def _is_division_by_zero_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(phrase in lowered for phrase in _DIVISION_BY_ZERO_PHRASES)
+
+
+def _is_stream_operator_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(phrase in lowered for phrase in _STREAM_OPERATOR_PHRASES)
+
+
+def _is_unused_variable_error(message: str) -> bool:
+    lowered = message.lower()
+    return any(phrase in lowered for phrase in _UNUSED_VARIABLE_PHRASES)
+
+
+def _infer_undeclared_initializer(line: str, var: str) -> Optional[str]:
+    stripped = line.strip()
+    assign_match = re.match(
+        rf"^[A-Za-z_]\w*\s*$", stripped
+    )
+    if assign_match:
+        return None
+
+    direct_assign = re.match(
+        rf"^\s*{re.escape(var)}\s*=\s*(.+?)\s*;\s*$",
+        line,
+    )
+    if direct_assign:
+        return direct_assign.group(1).strip()
+
+    compound_assign = re.match(
+        rf"^\s*{re.escape(var)}\s*([+\-*/%&|^]|<<|>>)=\s*(.+?)\s*;\s*$",
+        line,
+    )
+    if compound_assign:
+        return "0"
+
+    increment = re.match(rf"^\s*(\+\+|--){re.escape(var)}\s*;\s*$", line)
+    if increment:
+        return "0"
+
+    postfix = re.match(rf"^\s*{re.escape(var)}(\+\+|--)\s*;\s*$", line)
+    if postfix:
+        return "0"
+
+    return None
 
 
 def _brace_context(prefix_text: str, previous_text: str) -> str:
@@ -202,7 +325,10 @@ def fix_missing_closing_braces(source: str, _error: dict = None) -> Optional[str
     Repair missing trailing closing braces by tracking open blocks in LIFO
     order and appending the required braces at EOF.
     """
-    lines = _lines(source)
+    lines = [
+        line for line in _lines(source)
+        if not re.search(r"}\s*//\s*closes\s+\w+\s+opened at line\s+\d+", line)
+    ]
     if not lines:
         return source
 
@@ -454,10 +580,15 @@ def fix_syntax_error(source: str, error: dict) -> Optional[str]:
 
     line = lines[idx]
     stripped = line.rstrip("\n\r")
+    target_token = _extract_symbol(error.get("message", ""))
 
-    typo_fixed = _fix_keyword_typo(line)
+    stream_fixed = fix_stream_operator(source, error)
+    if stream_fixed is not None and stream_fixed != source:
+        return stream_fixed
+
+    typo_fixed = _fix_keyword_typo(line, target_token=target_token)
     if typo_fixed and typo_fixed != line:
-        lines[idx] = typo_fixed
+        lines[idx] = _append_missing_semicolon(typo_fixed) or typo_fixed
         return _join(lines)
 
     # Fix: missing closing brace at end of input
@@ -478,14 +609,19 @@ def fix_syntax_error(source: str, error: dict) -> Optional[str]:
         return _join(lines)
 
     # Fix: missing semicolon (skip lines ending with { } , or already ;)
-    if "expected" in msg and "';'" in msg:
-        if not re.search(r'[;{},]\s*$', stripped):
-            lines[idx] = stripped.rstrip() + ";\n"
+    if re.search(r"expected\s+['\"]?;['\"]?", msg):
+        semicolon_fixed = _append_missing_semicolon(line)
+        if semicolon_fixed:
+            lines[idx] = semicolon_fixed
             return _join(lines)
 
     # Fix: assignment in boolean condition
-    if "suggest parentheses" in msg or "assignment" in msg:
-        fixed = re.sub(r'(?<![=!<>])=(?!=)', '==', stripped)
+    if "suggest parentheses" in msg or "assignment used as truth value" in msg:
+        fixed = re.sub(
+            r'(if\s*\()([^)]*?)(?<![=!<>])=(?!=)([^)]*?)(\))',
+            r'\1\2==\3\4',
+            stripped,
+        )
         if fixed != stripped:
             lines[idx] = fixed + "\n"
             return _join(lines)
@@ -502,18 +638,6 @@ def fix_syntax_error(source: str, error: dict) -> Optional[str]:
         lines[idx] = stripped + quote + ";\n"
         return _join(lines)
 
-    # Fix: stream operator flip
-    if "cin" in line and "<<" in line:
-        fixed = re.sub(r'cin\s*<<', 'cin >>', line)
-        if fixed != line:
-            lines[idx] = fixed
-            return _join(lines)
-    if "cout" in line and ">>" in line:
-        fixed = re.sub(r'cout\s*>>', 'cout <<', line)
-        if fixed != line:
-            lines[idx] = fixed
-            return _join(lines)
-
     return None
 
 
@@ -523,6 +647,19 @@ def fix_name_resolution(source: str, error: dict) -> Optional[str]:
     'using namespace std;' if multiple are missing.
     """
     msg = error.get("message", "")
+    if _is_undeclared_identifier_error(msg):
+        line_no = error.get("line")
+        sym = _extract_symbol(msg)
+        if line_no and sym:
+            lines = _lines(source)
+            idx = int(line_no) - 1
+            if 0 <= idx < len(lines):
+                typo_fixed = _fix_keyword_typo(lines[idx], target_token=sym)
+                if typo_fixed and typo_fixed != lines[idx]:
+                    lines[idx] = _append_missing_semicolon(typo_fixed) or typo_fixed
+                    return _join(lines)
+        return fix_undeclared_variable(source, error)
+
     sym = _extract_symbol(msg)
     if not sym:
         return None
@@ -532,9 +669,9 @@ def fix_name_resolution(source: str, error: dict) -> Optional[str]:
         lines = _lines(source)
         idx = int(line_no) - 1
         if 0 <= idx < len(lines):
-            typo_fixed = _fix_keyword_typo(lines[idx])
+            typo_fixed = _fix_keyword_typo(lines[idx], target_token=sym)
             if typo_fixed and typo_fixed != lines[idx]:
-                lines[idx] = typo_fixed
+                lines[idx] = _append_missing_semicolon(typo_fixed) or typo_fixed
                 return _join(lines)
 
     # Fix typo 'end1' or 'endI' -> 'endl'
@@ -570,12 +707,253 @@ def fix_name_resolution(source: str, error: dict) -> Optional[str]:
     return patched
 
 
+def fix_undeclared_variable(source: str, error: dict) -> Optional[str]:
+    """
+    If a variable is used but never declared, insert a local auto declaration
+    before the first reported use, reusing the current line's initializer
+    when that intent is clear.
+    """
+    msg = error.get("message", "")
+    if not _is_undeclared_identifier_error(msg):
+        return None
+
+    var = _extract_symbol(msg)
+    if not var or var in _VALID_KEYWORDS:
+        return None
+
+    lines = _lines(source)
+    line_no = error.get("line")
+    if not line_no:
+        return None
+
+    idx = int(line_no) - 1
+    if idx < 0 or idx >= len(lines):
+        return None
+
+    # Don't add a duplicate declaration if the symbol already exists earlier.
+    decl_pattern = re.compile(
+        rf"\b(?:auto|bool|char|double|float|int|long|short|signed|unsigned|size_t|const|static|[\w:<>]+[*&\s]+)\b\s*\**\b{re.escape(var)}\b"
+    )
+    for existing in lines[:idx]:
+        if decl_pattern.search(existing):
+            return None
+
+    indent = re.match(r"^(\s*)", lines[idx]).group(1)
+    initializer = _infer_undeclared_initializer(lines[idx], var)
+    if initializer is None:
+        return None
+
+    lines.insert(idx, f"{indent}auto {var} = {initializer};\n")
+    return _join(lines)
+
+
+def fix_integer_overflow(source: str, error: dict) -> Optional[str]:
+    """
+    Widen obvious overflowing arithmetic so the expression is evaluated in a
+    larger integer type.
+    """
+    msg = error.get("message", "")
+    if not _is_integer_overflow_error(msg):
+        return None
+
+    line_no = error.get("line")
+    if not line_no:
+        return None
+
+    lines = _lines(source)
+    idx = int(line_no) - 1
+    if idx < 0 or idx >= len(lines):
+        return None
+
+    line = lines[idx]
+
+    fixed = re.sub(r"\bint\b", "long long", line, count=1)
+    if fixed != line:
+        lines[idx] = fixed
+        return _join(lines)
+
+    expr = re.search(r"(\b\w+\b)\s*(\+|\-|\*)\s*(\w+)", line)
+    if expr:
+        fixed = (
+            line[:expr.start()] +
+            f"(long long){expr.group(1)} {expr.group(2)} {expr.group(3)}" +
+            line[expr.end():]
+        )
+        lines[idx] = fixed
+        return _join(lines)
+
+    return None
+
+
+def inject_division_guard(source: str, error: dict) -> Optional[str]:
+    """
+    Insert a runtime zero check before a division whose divisor is a variable.
+    """
+    msg = error.get("message", "")
+    if not _is_division_by_zero_error(msg):
+        return None
+
+    lines = _lines(source)
+    var_match = re.search(r"'([A-Za-z_]\w*)'\s+is\s+0", msg)
+    divisor = var_match.group(1) if var_match else None
+
+    line_no = error.get("line")
+    if divisor is None and line_no:
+        idx = int(line_no) - 1
+        if 0 <= idx < len(lines):
+            line = lines[idx]
+            match = re.search(r"/\s*([a-zA-Z_]\w*)", line)
+            if match:
+                divisor = match.group(1)
+
+    if not divisor:
+        return None
+
+    guard_pattern = re.compile(rf"if\s*\(\s*{re.escape(divisor)}\s*==\s*0\s*\)")
+    if guard_pattern.search(source):
+        return None
+
+    div_idx = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("//"):
+            continue
+        if re.search(rf"/\s*{re.escape(divisor)}\b", line):
+            div_idx = i
+            break
+
+    if div_idx is None:
+        return None
+
+    indent = re.match(r"^(\s*)", lines[div_idx]).group(1)
+    guard = (
+        f"{indent}if ({divisor} == 0) {{\n"
+        f"{indent}    std::cerr << \"Error: division by zero\\n\";\n"
+        f"{indent}    return 1;\n"
+        f"{indent}}}\n"
+    )
+    lines.insert(div_idx, guard)
+    return _join(lines)
+
+
+def fix_division_by_zero(source: str, error: dict) -> Optional[str]:
+    """
+    Replace literal /0 with /1 as a safe placeholder, otherwise inject a guard
+    for variable divisors.
+    """
+    msg = error.get("message", "")
+    if not _is_division_by_zero_error(msg):
+        return None
+
+    line_no = error.get("line")
+    if not line_no:
+        return None
+
+    lines = _lines(source)
+    idx = int(line_no) - 1
+    if idx < 0 or idx >= len(lines):
+        return None
+
+    line = lines[idx]
+    fixed = re.sub(r"/\s*0\b", "/ 1 /* FIX: was /0 */", line)
+    if fixed != line:
+        lines[idx] = fixed
+        return _join(lines)
+
+    return inject_division_guard(source, error)
+
+
+def fix_stream_operator(source: str, error: dict) -> Optional[str]:
+    """
+    Repair flipped stream operators:
+    std::cin << x  -> std::cin >> x
+    std::cout >> x -> std::cout << x
+    """
+    msg = error.get("message", "")
+    if not _is_stream_operator_error(msg):
+        return None
+
+    line_no = error.get("line")
+    if not line_no:
+        return None
+
+    lines = _lines(source)
+    idx = int(line_no) - 1
+    if idx < 0 or idx >= len(lines):
+        return None
+
+    line = lines[idx]
+    if re.search(r"(?:std::)?cin\s*<<", line):
+        fixed = re.sub(r"((?:std::)?cin\s*)<<", r"\1>>", line)
+        if fixed != line:
+            lines[idx] = fixed
+            return _join(lines)
+
+    if re.search(r"(?:std::)?cout\s*>>", line):
+        fixed = re.sub(r"((?:std::)?cout\s*)>>", r"\1<<", line)
+        if fixed != line:
+            lines[idx] = fixed
+            return _join(lines)
+
+    return None
+
+
+def fix_unused_variable(source: str, error: dict) -> Optional[str]:
+    """
+    Remove a trivially unused declaration, or suppress the warning with a
+    void cast when deleting the line is not clearly safe.
+    """
+    msg = error.get("message", "")
+    if not _is_unused_variable_error(msg):
+        return None
+
+    var = _extract_symbol(msg)
+    if not var or var in _VALID_KEYWORDS:
+        return None
+
+    line_no = error.get("line")
+    if not line_no:
+        return None
+
+    lines = _lines(source)
+    idx = int(line_no) - 1
+    if idx < 0 or idx >= len(lines):
+        return None
+
+    line = lines[idx]
+    simple_decl = re.match(
+        rf"^\s*(?:auto|int|float|double|char|bool|long|short)\s+{re.escape(var)}\s*=\s*.+;\s*$",
+        line,
+    )
+    if simple_decl:
+        lines.pop(idx)
+        return _join(lines)
+
+    bare_decl = re.match(
+        rf"^\s*(?:auto|int|float|double|char|bool|long|short)\s+{re.escape(var)}\s*;\s*$",
+        line,
+    )
+    if bare_decl:
+        lines.pop(idx)
+        return _join(lines)
+
+    indent = re.match(r"^(\s*)", line).group(1)
+    if idx + 1 < len(lines) and re.match(rf"^\s*\(void\){re.escape(var)}\s*;\s*$", lines[idx + 1]):
+        return None
+    lines.insert(idx + 1, f"{indent}(void){var};\n")
+    return _join(lines)
+
+
 def fix_type_error(source: str, error: dict) -> Optional[str]:
     """
     Insert static_cast where an implicit narrowing/widening conversion is
     the culprit, or add & to fix a pointer mismatch.
     """
     msg = error.get("message", "").lower()
+    stream_fixed = fix_stream_operator(source, error)
+    if stream_fixed is not None and stream_fixed != source:
+        return stream_fixed
+
     line_no = error.get("line")
     if not line_no:
         return None
@@ -727,15 +1105,20 @@ _HANDLERS = {
     "uninitialized_memory": fix_uninitialized_variable,
     "syntax_error":     fix_syntax_error,
     "name_resolution":  fix_name_resolution,
+    "undeclared_variable": fix_undeclared_variable,
     "type_error":       fix_type_error,
     "return_type_error": fix_return_type_error,
     "redefinition":     fix_redefinition,
+    "integer_overflow": fix_integer_overflow,
+    "division_by_zero": fix_division_by_zero,
+    "stream_operator":  fix_stream_operator,
+    "unused_variable":  fix_unused_variable,
     "linker_error":     fix_linker_error,
     "access_error":     fix_access_error,
 }
 
 # Categories where we skip directly to user guidance (no point retrying)
-UNFIXABLE_CATEGORIES = {"linker_error", "access_error"}
+UNFIXABLE_CATEGORIES = {"linker_error", "access_error", "unused_variable"}
 
 
 def attempt_fix(source: str, error: dict) -> Optional[str]:
@@ -746,9 +1129,21 @@ def attempt_fix(source: str, error: dict) -> Optional[str]:
     category = error.get("category", "other")
     handler = _HANDLERS.get(category)
     if handler is not None:
-        return handler(source, error)
+        patched = handler(source, error)
+        if patched is not None and patched != source:
+            return patched
 
     msg = error.get("message", "")
+    if _is_stream_operator_error(msg):
+        return fix_stream_operator(source, error)
+    if _is_unused_variable_error(msg):
+        return fix_unused_variable(source, error)
+    if _is_integer_overflow_error(msg):
+        return fix_integer_overflow(source, error)
+    if _is_division_by_zero_error(msg):
+        return fix_division_by_zero(source, error)
+    if _is_undeclared_identifier_error(msg):
+        return fix_name_resolution(source, error)
     if _UNINIT_MESSAGE_RE.search(msg):
         return fix_uninitialized_variable(source, error)
 

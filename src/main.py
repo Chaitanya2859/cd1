@@ -20,6 +20,16 @@ BOLD="\033[1m"
 RESET="\033[0m"
 
 
+def _is_security_only_diagnostic(error) -> bool:
+    message = (getattr(error, "message", "") or "").lower()
+    error_type = (getattr(error, "error_type", "") or "").lower()
+    return error_type == "warning" and (
+        "unused variable" in message
+        or "set but not used" in message
+        or "declared but never used" in message
+    )
+
+
 def parse_arguments():
     parser=argparse.ArgumentParser(description="C++ Error Explanation Tool")
     parser.add_argument("source_file",help="C++ source file to compile")
@@ -121,30 +131,34 @@ def main():
                 and finding.line == e.line
             ]
 
+    visible_errors = [e for e in errors if not _is_security_only_diagnostic(e)]
+    visible_error_count = sum(1 for e in visible_errors if e.error_type == "error")
+    visible_warning_count = sum(1 for e in visible_errors if e.error_type == "warning")
+
     #JSON mode
 
     if args.json:
         result={
-            "status": "error",
+            "status": "error" if visible_errors else "success",
             "file": args.source_file,
-            "error_count": sum(1 for e in errors if e.error_type=="error"),
-            "warning_count": sum(1 for e in errors if e.error_type=="warning"),
-            "errors": [e.to_dict() for e in errors],
+            "error_count": visible_error_count,
+            "warning_count": visible_warning_count,
+            "errors": [e.to_dict() for e in visible_errors],
             "security_findings": [finding.to_dict() for finding in security_findings],
             "security_report": format_security_report(security_findings),
         }
 
         print(json.dumps(result, indent=2))
-        return 1
+        return 1 if visible_error_count > 0 else 0
     
     # Human readable output
 
-    print(f"\n{len(errors)} issue(s) found:\n")
+    print(f"\n{len(visible_errors)} issue(s) found:\n")
 
     error_count=0
     warning_count=0
 
-    for e in errors:
+    for e in visible_errors:
         if e.error_type=="error":
             error_count+=1
         elif e.error_type=="warning":

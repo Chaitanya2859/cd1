@@ -33,6 +33,7 @@ CATEGORY_ALIASES = {
     "redefinition":     "redefinition",
     "access_error":     "access_error",
     "return_type_error":"return_type_error",
+    "unused_variable":  "unused_variable",
     "other":            "other",
 }
 
@@ -178,6 +179,26 @@ class ErrorClassifier:
     def predict(self, message: str, ast_node: str = "") -> Tuple[Optional[str], float]:
         if not message:
             return None, 0.0
+
+        lowered = message.lower()
+        if any(phrase in lowered for phrase in (
+            "used uninitialized",
+            "may be used uninitialized",
+            "is uninitialized when used here",
+            "uninitialized when used here",
+            "wuninitialized",
+            "uninitialized variable",
+        )):
+            return "uninitialized_memory", 0.98
+        if any(phrase in lowered for phrase in (
+            "set but not used",
+            "unused variable",
+            "unused but set variable",
+            "declared but never used",
+            "-wunused-but-set-variable",
+            "-wunused-variable",
+        )):
+            return "unused_variable", 0.98
 
         if not self.load():
             if os.path.exists(self.training_data_file):

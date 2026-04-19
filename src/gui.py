@@ -939,9 +939,22 @@ class UserGuidanceDialog(QDialog):
         raw_msg = last_err.get("message", "Unknown error")
         cat     = last_err.get("category", "other")
         line_no = last_err.get("line", "?")
+        suggestion = last_err.get("suggestion", "")
 
         layout.addWidget(QLabel(f"<b>Error:</b> {raw_msg}"))
         layout.addWidget(QLabel(f"<b>Category:</b> {cat}  |  <b>Line:</b> {line_no}"))
+
+        if suggestion:
+            suggestion_title = QLabel("<b>Suggested fix:</b>")
+            layout.addWidget(suggestion_title)
+            suggestion_box = QLabel(suggestion.replace("\n", "<br>"))
+            suggestion_box.setTextFormat(Qt.TextFormat.RichText)
+            suggestion_box.setWordWrap(True)
+            suggestion_box.setStyleSheet(
+                f"background-color: {PANE_BG}; border: 1px solid {BORDER_COLOR}; "
+                f"border-radius: 4px; padding: 8px; color: {TEXT_MAIN};"
+            )
+            layout.addWidget(suggestion_box)
 
         # What was tried
         tried_label = QLabel("<b>What I tried:</b>")

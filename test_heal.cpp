@@ -2,7 +2,7 @@
 
 int main() {
     int x = 5;
-    cout << "Value: " >> x << endl;
+    const << "Value: " >> x << endl;
 
     string s = 'hello';
     char c = "a";

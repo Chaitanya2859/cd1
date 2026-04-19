@@ -42,6 +42,13 @@ _SEVERITY_WEIGHT: dict[Severity, int] = {
 
 _DIAGNOSTIC_RULES = [
     (
+        re.compile(r"unused variable|variable .+ set but not used", re.IGNORECASE),
+        "Low",
+        "Unused Variable / Dead Code",
+        "An unused variable can indicate dead code, abandoned checks, or incomplete hardening logic.",
+        "Remove the variable or wire it into the intended validation or control flow.",
+    ),
+    (
         re.compile(r"may be used uninitialized", re.IGNORECASE),
         "High",
         "Uninitialized Memory",

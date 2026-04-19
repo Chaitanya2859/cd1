@@ -108,6 +108,11 @@ def explain_category(category: str, message: str) -> Optional[Dict[str, str]]:
 
 SECURITY_RULES = [
     {
+        "pattern": r"unused variable|variable .+ set but not used",
+        "risk": "Low",
+        "reason": "Unused variables can indicate dead code, abandoned checks, or incomplete security logic."
+    },
+    {
         "pattern": r"may be used uninitialized",
         "risk": "High",
         "reason": "Uninitialized variables may cause undefined behavior or memory corruption."
